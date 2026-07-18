@@ -52,9 +52,9 @@ docs/             -> anotações, resultados experimentais, diagramas
 
 1. [ ] Modelos de dados + conexão com banco (Pet, Localizacao, ZonaSegura)
 2. [ ] Endpoint de ingestão de coordenadas GPS (`POST /pets/{id}/localizacoes`)
-3. [ ] Abordagem 1: raio fixo (mais simples, MVP ponta a ponta)
-4. [ ] Endpoint de consulta de zona + verificação dentro/fora
-5. [ ] Abordagem 2: convex hull
+3. [x] Abordagem 1: raio fixo (mais simples, MVP ponta a ponta)
+4. [x] Endpoint de consulta de zona + verificação dentro/fora
+5. [x] Abordagem 2: convex hull
 6. [ ] Abordagem 3: densidade (DBSCAN/KDE)
 7. [ ] Módulo de comparação experimental (falsos positivos, latência, cobertura)
 8. [ ] Testes automatizados dos 3 algoritmos

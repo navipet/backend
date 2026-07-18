@@ -8,7 +8,7 @@ from app.utils.geo import deslocar_ponto
 
 class RaioFixo(AbordagemGeofencing):
     """
-    Abordagem baseline:
+    Abordagem baseline (Seção 2.4 / Tabela 2 do TCC):
     círculo de raio R em torno do centroide das trajetórias históricas.
 
     Limitação conhecida: não se adapta ao formato real do território

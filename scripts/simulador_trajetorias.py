@@ -1,10 +1,12 @@
 """
-Simulador de trajetórias GPS de um pet, na ausência do hardware físico.
+Simulador de trajetórias GPS de um pet, na ausência do hardware físico
+(ver Seção 5.2 do pré-projeto: "simulador de trajetórias, na ausência do
+hardware físico durante a fase de testes").
 
 O simulador gera um passeio aleatório (random walk) em torno de um
 "território" e, com uma certa probabilidade, alterna para um segundo
 território (ex: quintal do vizinho) -- útil para testar o cenário
-descrito nos Resultados Esperados: pets que frequentam
+descrito nos Resultados Esperados (Seção 5.3): pets que frequentam
 múltiplos territórios não contíguos, onde se espera que a abordagem de
 densidade supere raio fixo e convex hull.
 
