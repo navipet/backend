@@ -51,11 +51,11 @@ docs/             -> anotações, resultados experimentais, diagramas
 ## Roadmap de implementação (ordem sugerida)
 
 1. [ ] Modelos de dados + conexão com banco (Pet, Localizacao, ZonaSegura)
-2. [ ] Endpoint de ingestão de coordenadas GPS (`POST /pets/{id}/localizacoes`)
+2. [x] Endpoint de ingestão de coordenadas GPS (`POST /pets/{id}/localizacoes`)
 3. [x] Abordagem 1: raio fixo (mais simples, MVP ponta a ponta)
 4. [x] Endpoint de consulta de zona + verificação dentro/fora
 5. [x] Abordagem 2: convex hull
-6. [ ] Abordagem 3: densidade (DBSCAN/KDE)
+6. [x] Abordagem 3: densidade (DBSCAN/KDE)
 7. [ ] Módulo de comparação experimental (falsos positivos, latência, cobertura)
 8. [ ] Testes automatizados dos 3 algoritmos
 9. [ ] Integração com frontend e infraestrutura (broker de mensageria)

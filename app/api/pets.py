@@ -1,5 +1,5 @@
 from datetime import datetime
-
+from app.algorithms.densidade import DensidadeDBSCAN
 from fastapi import APIRouter, Depends, HTTPException
 from geoalchemy2.shape import from_shape, to_shape
 from shapely.geometry import Point, mapping
@@ -59,6 +59,8 @@ def calcular_zona_segura(
         algoritmo = RaioFixo(raio_metros=settings.raio_fixo_metros)
     elif abordagem == "convex_hull":
         algoritmo = ConvexHull()
+    elif abordagem == "densidade":
+        algoritmo = DensidadeDBSCAN()
     else:
         raise HTTPException(400, f"Abordagem '{abordagem}' ainda não implementada")
 
@@ -105,7 +107,7 @@ def verificar_status(pet_id: int, db: Session = Depends(get_db)):
 
     poligono_zona = to_shape(zona.geom)
     ponto_atual = Point(ultima_localizacao.longitude, ultima_localizacao.latitude)
-    dentro = poligono_zona.contains(ponto_atual)
+    dentro = poligono_zona.covers(ponto_atual)
 
     return StatusOut(
         pet_id=pet_id,
