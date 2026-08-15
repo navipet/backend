@@ -56,7 +56,7 @@ docs/             -> anotações, resultados experimentais, diagramas
 4. [x] Endpoint de consulta de zona + verificação dentro/fora
 5. [x] Abordagem 2: convex hull
 6. [x] Abordagem 3: densidade (DBSCAN/KDE)
-7. [ ] Módulo de comparação experimental (falsos positivos, latência, cobertura)
+7. [x] Módulo de comparação experimental (falsos positivos, latência, cobertura)
 8. [ ] Testes automatizados dos 3 algoritmos
 9. [ ] Integração com frontend e infraestrutura (broker de mensageria)
 
