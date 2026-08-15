@@ -1,23 +1,53 @@
 from datetime import datetime
-from app.algorithms.densidade import DensidadeDBSCAN
+
 from fastapi import APIRouter, Depends, HTTPException
 from geoalchemy2.shape import from_shape, to_shape
 from shapely.geometry import Point, mapping
 from sqlalchemy.orm import Session
 
 from app.algorithms.convex_hull import ConvexHull
+from app.algorithms.densidade import DensidadeDBSCAN
 from app.algorithms.raio_fixo import RaioFixo
 from app.core.config import settings
 from app.db.session import get_db
-from app.models.models import Localizacao, ZonaSegura
+from app.models.models import Localizacao, Pet, ZonaSegura
 from app.models.schemas import (
     LocalizacaoCreate,
     LocalizacaoOut,
+    PetCreate,
+    PetOut,
     StatusOut,
     ZonaSeguraOut,
 )
 
 router = APIRouter(prefix="/pets", tags=["pets"])
+
+
+@router.post("", response_model=PetOut, status_code=201)
+def criar_pet(dados: PetCreate, db: Session = Depends(get_db)):
+    """Cadastra um novo pet vinculado a um tutor."""
+    pet = Pet(nome=dados.nome, tutor_id=dados.tutor_id)
+    db.add(pet)
+    db.commit()
+    db.refresh(pet)
+    return pet
+
+
+@router.get("", response_model=list[PetOut])
+def listar_pets(tutor_id: int | None = None, db: Session = Depends(get_db)):
+    """Lista pets, opcionalmente filtrando por tutor (?tutor_id=123)."""
+    query = db.query(Pet)
+    if tutor_id is not None:
+        query = query.filter(Pet.tutor_id == tutor_id)
+    return query.all()
+
+
+@router.get("/{pet_id}", response_model=PetOut)
+def obter_pet(pet_id: int, db: Session = Depends(get_db)):
+    pet = db.query(Pet).filter(Pet.id == pet_id).first()
+    if not pet:
+        raise HTTPException(404, "Pet não encontrado")
+    return pet
 
 
 @router.post("/{pet_id}/localizacoes", response_model=LocalizacaoOut)
@@ -40,14 +70,29 @@ def registrar_localizacao(
     return localizacao
 
 
+@router.get("/{pet_id}/historico", response_model=list[LocalizacaoOut])
+def obter_historico(pet_id: int, limite: int = 500, db: Session = Depends(get_db)):
+    """
+    Retorna o histórico de localizações em ordem cronológica -- usado
+    pelo frontend para desenhar o mapa/heatmap de trajetórias.
+    """
+    localizacoes = (
+        db.query(Localizacao)
+        .filter(Localizacao.pet_id == pet_id)
+        .order_by(Localizacao.timestamp.desc())
+        .limit(limite)
+        .all()
+    )
+    return list(reversed(localizacoes))
+
+
 @router.post("/{pet_id}/zona-segura/calcular", response_model=ZonaSeguraOut)
 def calcular_zona_segura(
     pet_id: int, abordagem: str = "raio_fixo", db: Session = Depends(get_db)
 ):
     """
     Recalcula a zona segura do pet a partir do histórico de localizações,
-    usando a abordagem indicada (raio_fixo, convex_hull; densidade entra
-    na próxima etapa do roadmap).
+    usando a abordagem indicada (raio_fixo, convex_hull, densidade).
     """
     localizacoes = db.query(Localizacao).filter(Localizacao.pet_id == pet_id).all()
     if not localizacoes:
@@ -75,6 +120,32 @@ def calcular_zona_segura(
     db.commit()
     db.refresh(zona)
 
+    return ZonaSeguraOut(
+        id=zona.id,
+        pet_id=zona.pet_id,
+        abordagem=zona.abordagem,
+        geometria=mapping(poligono),
+        criada_em=zona.criada_em,
+    )
+
+
+@router.get("/{pet_id}/zona-segura", response_model=ZonaSeguraOut)
+def obter_zona_segura(pet_id: int, db: Session = Depends(get_db)):
+    """
+    Retorna a última zona segura já calculada, sem recalcular -- usado
+    pelo frontend para desenhar a zona sobre o mapa (ex: painel de
+    configuração da Seção 4.3 do TCC de frontend).
+    """
+    zona = (
+        db.query(ZonaSegura)
+        .filter(ZonaSegura.pet_id == pet_id)
+        .order_by(ZonaSegura.criada_em.desc())
+        .first()
+    )
+    if not zona:
+        raise HTTPException(404, "Nenhuma zona segura calculada para este pet")
+
+    poligono = to_shape(zona.geom)
     return ZonaSeguraOut(
         id=zona.id,
         pet_id=zona.pet_id,
