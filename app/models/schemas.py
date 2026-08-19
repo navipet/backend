@@ -50,3 +50,15 @@ class StatusOut(BaseModel):
     dentro_da_zona: bool
     abordagem_utilizada: str
     distancia_da_borda_metros: float | None = None
+
+
+class AlertaOut(BaseModel):
+    id: int
+    pet_id: int
+    tipo: str
+    mensagem: str
+    criado_em: datetime
+    resolvido: bool
+
+    class Config:
+        from_attributes = True

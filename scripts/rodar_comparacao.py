@@ -3,21 +3,24 @@ Roda a comparação experimental entre as 3 abordagens de geofencing
 (Objetivo Específico 3 / Seção 6.3 do pré-projeto), usando dados gerados
 pelo simulador de trajetórias (sem precisar de API nem banco rodando).
 
-Uso básico:
+Uso básico (só imprime a tabela no terminal):
     python -m scripts.rodar_comparacao
 
-Ajustando parâmetros do experimento:
-    python -m scripts.rodar_comparacao --num-pontos 500 --intervalo-minutos 5 \
-        --distancia-fuga 300 --passos-fuga 30
+Exportando o relatório consolidado (CSV + gráfico de barras), para usar
+como figura no TCC:
+    python -m scripts.rodar_comparacao --num-pontos 500 \
+        --output-csv docs/dados_experimentais/resultado.csv \
+        --output-grafico docs/dados_experimentais/resultado.png
 
-Testando o cenário central da Seção 5.3 (2 territórios não contíguos),
-onde se espera que densidade tenha menor taxa de falsos positivos:
+Testando o cenário central da Seção 5.3 (2 territórios não contíguos):
     python -m scripts.rodar_comparacao --num-pontos 500 \
         --segundo-lat -5.1200 --segundo-lon -42.8400 \
         --prob-mudanca-territorio 0.03
 """
 
 import argparse
+import csv
+import os
 
 from app.algorithms.convex_hull import ConvexHull
 from app.algorithms.densidade import DensidadeDBSCAN
@@ -34,11 +37,7 @@ from scripts.simulador_trajetorias import (
 def gerar_trajetoria_fuga(
     lat_inicio: float, lon_inicio: float, distancia_max_metros: float, passos: int
 ) -> list[tuple[float, float]]:
-    """
-    Simula o pet se afastando em linha reta da zona segura, para medir a
-    latência de detecção: quantos pontos até o sistema perceber que ele
-    saiu.
-    """
+    """Simula o pet se afastando em linha reta, para medir a latência de detecção."""
     pontos = []
     for i in range(1, passos + 1):
         distancia = distancia_max_metros * i / passos
@@ -69,6 +68,76 @@ def imprimir_tabela(resultados, intervalo_minutos: float) -> None:
         )
 
 
+def salvar_csv(resultados, caminho: str, intervalo_minutos: float) -> None:
+    os.makedirs(os.path.dirname(caminho) or ".", exist_ok=True)
+    with open(caminho, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(
+            [
+                "abordagem",
+                "taxa_falsos_positivos",
+                "cobertura_territorial",
+                "latencia_deteccao_minutos",
+                "tempo_construcao_zona_ms",
+            ]
+        )
+        for r in resultados:
+            latencia_min = (
+                r.latencia_deteccao_pontos * intervalo_minutos
+                if r.latencia_deteccao_pontos is not None
+                else ""
+            )
+            writer.writerow(
+                [
+                    r.abordagem,
+                    r.taxa_falsos_positivos,
+                    r.cobertura_territorial,
+                    latencia_min,
+                    r.tempo_construcao_zona_ms,
+                ]
+            )
+    print(f"CSV salvo em {caminho}")
+
+
+def gerar_grafico(resultados, caminho: str) -> None:
+    """Gera um gráfico de barras (falsos positivos x cobertura) por abordagem."""
+    import matplotlib
+
+    matplotlib.use("Agg")  # backend sem interface gráfica, só para salvar arquivo
+    import matplotlib.pyplot as plt
+
+    os.makedirs(os.path.dirname(caminho) or ".", exist_ok=True)
+
+    nomes = [r.abordagem for r in resultados]
+    falsos_positivos = [r.taxa_falsos_positivos * 100 for r in resultados]
+    coberturas = [r.cobertura_territorial * 100 for r in resultados]
+
+    posicoes = range(len(nomes))
+    largura = 0.35
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.bar(
+        [p - largura / 2 for p in posicoes],
+        falsos_positivos,
+        largura,
+        label="Falsos positivos (%)",
+    )
+    ax.bar(
+        [p + largura / 2 for p in posicoes],
+        coberturas,
+        largura,
+        label="Cobertura territorial (%)",
+    )
+    ax.set_xticks(list(posicoes))
+    ax.set_xticklabels(nomes)
+    ax.set_ylabel("%")
+    ax.set_title("Comparação experimental das abordagens de geofencing")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(caminho, dpi=150)
+    print(f"Gráfico salvo em {caminho}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Comparação experimental das 3 abordagens de geofencing"
@@ -83,6 +152,8 @@ def main():
     )
     parser.add_argument("--segundo-lon", type=float, default=None)
     parser.add_argument("--prob-mudanca-territorio", type=float, default=0.03)
+    parser.add_argument("--output-csv", type=str, default=None)
+    parser.add_argument("--output-grafico", type=str, default=None)
     args = parser.parse_args()
 
     segundo_territorio = None
@@ -111,6 +182,11 @@ def main():
     resultados = comparar_abordagens(algoritmos, pontos_historico, trajetoria_fuga)
 
     imprimir_tabela(resultados, args.intervalo_minutos)
+
+    if args.output_csv:
+        salvar_csv(resultados, args.output_csv, args.intervalo_minutos)
+    if args.output_grafico:
+        gerar_grafico(resultados, args.output_grafico)
 
 
 if __name__ == "__main__":
