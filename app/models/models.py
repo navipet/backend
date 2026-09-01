@@ -7,13 +7,28 @@ from sqlalchemy.orm import relationship
 from app.db.session import Base
 
 
+class Tutor(Base):
+    """Dono do pet -- quem se cadastra e faz login no app."""
+
+    __tablename__ = "tutores"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String, nullable=False)
+    email = Column(String, nullable=False, unique=True, index=True)
+    senha_hash = Column(String, nullable=False)
+    criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    pets = relationship("Pet", back_populates="tutor")
+
+
 class Pet(Base):
     __tablename__ = "pets"
 
     id = Column(Integer, primary_key=True, index=True)
     nome = Column(String, nullable=False)
-    tutor_id = Column(Integer, nullable=False, index=True)
+    tutor_id = Column(Integer, ForeignKey("tutores.id"), nullable=False, index=True)
 
+    tutor = relationship("Tutor", back_populates="pets")
     localizacoes = relationship("Localizacao", back_populates="pet")
     zonas_seguras = relationship("ZonaSegura", back_populates="pet")
     alertas = relationship("Alerta", back_populates="pet")
@@ -45,15 +60,6 @@ class ZonaSegura(Base):
 
 
 class Alerta(Base):
-    """
-    Alerta disparado quando o pet é detectado fora da zona segura
-    (Seção 5.1, item iv do escopo: "mecanismo de disparo de alertas").
-
-    O disparo em si (notificação push/e-mail/WebSocket) é responsabilidade
-    da camada de infraestrutura/frontend (Tabela 1); este backend só
-    detecta a condição e registra o alerta, disponibilizando via API.
-    """
-
     __tablename__ = "alertas"
 
     id = Column(Integer, primary_key=True, index=True)

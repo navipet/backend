@@ -1,6 +1,31 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
+
+
+class TutorCreate(BaseModel):
+    nome: str
+    email: EmailStr
+    senha: str = Field(..., min_length=6)
+
+
+class TutorOut(BaseModel):
+    id: int
+    nome: str
+    email: str
+
+    class Config:
+        from_attributes = True
+
+
+class TutorLogin(BaseModel):
+    email: EmailStr
+    senha: str
+
+
+class TokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
 
 
 class PetCreate(BaseModel):

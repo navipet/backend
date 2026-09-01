@@ -9,9 +9,12 @@ class Settings(BaseSettings):
 
     raio_fixo_metros: float = 100.0
 
-    # Origens permitidas para CORS, separadas por vírgula. Em dev, o
-    # frontend costuma rodar em portas tipo 5173 (Vite) ou 3000 (CRA).
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
+
+    # Chave usada para assinar os tokens JWT de login. MUDE isso em produção
+    # (defina SECRET_KEY como variável de ambiente) -- nunca deixe o valor
+    # padrão em um ambiente real.
+    secret_key: str = "troque-esta-chave-em-producao"
 
     class Config:
         env_file = ".env"
