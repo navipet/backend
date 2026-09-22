@@ -2,7 +2,7 @@ from app.algorithms.densidade import DensidadeDBSCAN
 
 
 def _territorio(lat_centro, lon_centro, n=10, passo=0.00005):
-    """Gera n pontos bem próximos entre si, simulando um território denso."""
+    """gera n pontos bem próximos entre si, simulando um território denso"""
     pontos = []
     for i in range(n):
         pontos.append((lat_centro + i * passo, lon_centro + i * passo))
@@ -11,8 +11,7 @@ def _territorio(lat_centro, lon_centro, n=10, passo=0.00005):
 
 def test_identifica_dois_territorios_separados():
     """
-    Cenário central do TCC (Seção 5.3): pet que frequenta 2 territórios
-    não contíguos. Espera-se que a densidade gere uma zona que cobre os
+    cenário central do TCC: pet que frequenta 2 territórios não contíguos. espera-se que a densidade gere uma zona que cobre os
     dois, sem incluir a área vazia entre eles.
     """
     algoritmo = DensidadeDBSCAN(eps_metros=30.0, min_amostras=3)
@@ -33,7 +32,7 @@ def test_identifica_dois_territorios_separados():
 
 
 def test_pontos_isolados_sem_cluster_geram_erro():
-    """Histórico muito esparso (todo ruído) deve avisar, não gerar zona vazia."""
+    """histórico muito esparso (todo ruído) deve avisar, não gerar zona vazia."""
     algoritmo = DensidadeDBSCAN(eps_metros=10.0, min_amostras=5)
     pontos = [
         (-5.0800, -42.7900),

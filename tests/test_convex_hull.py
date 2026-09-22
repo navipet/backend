@@ -33,7 +33,7 @@ def test_ponto_fora_do_quadrado_fica_fora_do_hull():
 
 
 def test_dois_pontos_nao_quebra_e_gera_area_minima():
-    """Histórico degenerado (só 2 pontos) não deve levantar exceção."""
+    """histórico degenerado (só 2 pontos) não deve levantar exceção"""
     algoritmo = ConvexHull()
     pontos = [(-5.0892, -42.8016), (-5.0893, -42.8017)]
 

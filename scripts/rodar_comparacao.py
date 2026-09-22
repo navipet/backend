@@ -1,18 +1,17 @@
 """
-Roda a comparação experimental entre as 3 abordagens de geofencing
-(Objetivo Específico 3 / Seção 6.3 do pré-projeto), usando dados gerados
-pelo simulador de trajetórias (sem precisar de API nem banco rodando).
+roda a comparação experimental entre as 3 abordagens de geofencing, usando dados gerados
+pelo simulador de trajetórias (sem precisar de API nem banco rodando)
 
-Uso básico (só imprime a tabela no terminal):
+uso básico (só imprime a tabela no terminal):
     python -m scripts.rodar_comparacao
 
-Exportando o relatório consolidado (CSV + gráfico de barras), para usar
+exportando o relatório consolidado (CSV + gráfico de barras), para usar
 como figura no TCC:
     python -m scripts.rodar_comparacao --num-pontos 500 \
         --output-csv docs/dados_experimentais/resultado.csv \
         --output-grafico docs/dados_experimentais/resultado.png
 
-Testando o cenário central da Seção 5.3 (2 territórios não contíguos):
+testando o cenário central da Seção 5.3 (2 territórios não contíguos):
     python -m scripts.rodar_comparacao --num-pontos 500 \
         --segundo-lat -5.1200 --segundo-lon -42.8400 \
         --prob-mudanca-territorio 0.03
@@ -37,7 +36,7 @@ from scripts.simulador_trajetorias import (
 def gerar_trajetoria_fuga(
     lat_inicio: float, lon_inicio: float, distancia_max_metros: float, passos: int
 ) -> list[tuple[float, float]]:
-    """Simula o pet se afastando em linha reta, para medir a latência de detecção."""
+    """simula o pet se afastando em linha reta, para medir a latência de detecção"""
     pontos = []
     for i in range(1, passos + 1):
         distancia = distancia_max_metros * i / passos
@@ -100,7 +99,7 @@ def salvar_csv(resultados, caminho: str, intervalo_minutos: float) -> None:
 
 
 def gerar_grafico(resultados, caminho: str) -> None:
-    """Gera um gráfico de barras (falsos positivos x cobertura) por abordagem."""
+    """gera um gráfico de barras (falsos positivos x cobertura) por abordagem"""
     import matplotlib
 
     matplotlib.use("Agg")  # backend sem interface gráfica, só para salvar arquivo

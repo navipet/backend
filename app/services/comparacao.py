@@ -1,24 +1,16 @@
 """
-Módulo de comparação experimental entre as 3 abordagens de geofencing
-(Objetivo Específico 3 / Seção 6.3 do pré-projeto).
+modulo de comparação experimental entre as 3 abordagens de geofencing
 
-Metodologia adotada:
-- O histórico de localizações é dividido em treino/teste. A zona é
-  construída só com o treino.
-- Taxa de falsos positivos: proporção de pontos de TESTE (localizações
-  reais e legítimas do pet, não usadas para construir a zona) que caem
-  FORA da zona construída. Isso corresponde exatamente à definição da
-  Seção 6.3: "proporção de alertas emitidos quando o animal se
-  encontrava, de fato, em área segura".
-- Cobertura territorial: proporção dos pontos de TREINO contidos na
-  zona gerada.
-- Latência de detecção: dado uma trajetória de "fuga" simulada (o pet se
-  afastando da zona), quantos pontos até o primeiro ser detectado como
-  fora da zona. Retorna None se a fuga não foi longe o suficiente para
-  escapar dentro do numero de passos fornecido.
-- Tempo de construção da zona (ms): custo computacional do algoritmo,
-  relevante para a expectativa (Seção 5.3) de que densidade seja mais
-  lenta que as abordagens geométricas simples.
+metodologia adotada:
+- o histórico de localizações é dividido em treino/teste. a zona é construída só com o treino
+- taxa de falsos positivos: proporção de pontos de TESTE (localizações reais e legítimas do pet, não usadas para construir a zona) 
+  que caem FORA da zona construída. isso corresponde exatamente à definição: "proporção de alertas emitidos quando o animal se
+  encontrava, de fato, em área segura"
+- cobertura territorial: proporção dos pontos de TREINO contidos na zona gerada
+- latência de detecção: dado uma trajetória de "fuga" simulada (o pet se afastando da zona), quantos pontos até o primeiro ser detectado como
+  fora da zona. retorna None se a fuga não foi longe o suficiente para escapar dentro do numero de passos fornecido.
+- tempo de construção da zona (ms): custo computacional do algoritmo, relevante para a expectativa de que densidade seja mais
+  lenta que as abordagens geométricas simples
 """
 
 import time
@@ -76,7 +68,7 @@ def avaliar_abordagem(
     trajetoria_fuga: list[tuple[float, float]] | None = None,
     proporcao_teste: float = PROPORCAO_TESTE_PADRAO,
 ) -> ResultadoComparacao:
-    """Avalia uma única abordagem sobre um histórico de localizações."""
+    """avalia uma única abordagem sobre um histórico de localizações"""
     treino, teste = _dividir_treino_teste(pontos_historico, proporcao_teste)
 
     inicio = time.perf_counter()
@@ -103,10 +95,10 @@ def comparar_abordagens(
     proporcao_teste: float = PROPORCAO_TESTE_PADRAO,
 ) -> list[ResultadoComparacao]:
     """
-    Avalia várias abordagens sobre o mesmo histórico, para comparação
-    direta. Se uma abordagem falhar (ex: densidade sem cluster suficiente),
+    avalia várias abordagens sobre o mesmo histórico, para comparação
+    direta. se uma abordagem falhar (ex: densidade sem cluster suficiente),
     o erro não derruba a comparação inteira -- entra como resultado NaN,
-    o que já é um dado relevante (ela precisa de mais histórico).
+    o que já é um dado relevante (ela precisa de mais histórico)
     """
     resultados = []
     for algoritmo in algoritmos:

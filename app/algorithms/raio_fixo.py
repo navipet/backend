@@ -8,11 +8,10 @@ from app.utils.geo import deslocar_ponto
 
 class RaioFixo(AbordagemGeofencing):
     """
-    Abordagem baseline (Seção 2.4 / Tabela 2 do TCC):
+    abordagem baseline:
     círculo de raio R em torno do centroide das trajetórias históricas.
 
-    Limitação conhecida: não se adapta ao formato real do território
-    habitual do pet.
+    limitação conhecida: não se adapta ao formato real do território habitual do pet.
     """
 
     nome = "raio_fixo"
@@ -34,7 +33,7 @@ class RaioFixo(AbordagemGeofencing):
         self, lat_centro: float, lon_centro: float, raio_metros: float
     ) -> Polygon:
         """
-        Gera um polígono aproximando um círculo geodésico ao redor do
+        gera um polígono aproximando um círculo geodésico ao redor do
         centro, usando o util compartilhado de deslocamento de coordenadas.
         """
         pontos_circulo = []

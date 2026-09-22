@@ -12,7 +12,7 @@ router = APIRouter(prefix="/tutores", tags=["tutores"])
 
 @router.post("", response_model=TutorOut, status_code=201)
 def criar_tutor(dados: TutorCreate, db: Session = Depends(get_db)):
-    """Cadastra um novo tutor -- é ele quem faz login e usa o app."""
+    """cadastra um novo tutor -- é ele quem faz login e usa o app"""
     existente = db.query(Tutor).filter(Tutor.email == dados.email).first()
     if existente:
         raise HTTPException(400, "Já existe um tutor cadastrado com esse e-mail")
@@ -30,7 +30,7 @@ def criar_tutor(dados: TutorCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenOut)
 def login(dados: TutorLogin, db: Session = Depends(get_db)):
-    """Autentica o tutor e retorna um token de acesso (JWT, válido por 24h)."""
+    """autentica o tutor e retorna um token de acesso (JWT, valido por 24h)"""
     tutor = db.query(Tutor).filter(Tutor.email == dados.email).first()
     if not tutor or not verificar_senha(dados.senha, tutor.senha_hash):
         raise HTTPException(401, "E-mail ou senha incorretos")
@@ -42,8 +42,8 @@ def login(dados: TutorLogin, db: Session = Depends(get_db)):
 @router.get("/me", response_model=TutorOut)
 def obter_tutor_logado(tutor: Tutor = Depends(get_tutor_atual)):
     """
-    Retorna os dados do tutor autenticado -- útil pro frontend confirmar
-    a sessão (ex: ao recarregar a página, chama isso pra saber se o token
-    salvo ainda é válido e quem está logado).
+    retorna os dados do tutor autenticado -- util pro frontend confirmar a sessão 
+    (ex: ao recarregar a página, chama isso pra saber se o token
+    salvo ainda é válido e quem está logado)
     """
     return tutor

@@ -5,8 +5,7 @@ from sklearn.cluster import DBSCAN
 
 from app.algorithms.base import AbordagemGeofencing
 
-# Aproximações de conversão grau -> metro perto do equador, usadas só para
-# dar escala em metros ao parâmetro eps do DBSCAN (ver Seção 2.3 do TCC).
+# aproximações de conversão grau -> metro perto do equador, usadas só para dar escala em metros ao parâmetro eps do DBSCAN
 METROS_POR_GRAU_LAT = 110_540
 METROS_POR_GRAU_LON_NO_EQUADOR = 111_320
 
@@ -16,19 +15,15 @@ GRAUS_POR_METRO_APROX = 1 / 111_320
 
 class DensidadeDBSCAN(AbordagemGeofencing):
     """
-    Abordagem baseada em densidade (Seção 2.3 / Tabela 2 do TCC):
-    identifica regiões de alta concentração de pontos via DBSCAN e
-    constrói a zona segura como a união dos polígonos (convex hull) de
-    cada cluster denso encontrado.
+    abordagem baseada em densidade:
+    identifica regiões de alta concentração de pontos via DBSCAN e constrói a zona segura 
+    como a união dos polígonos (convex hull) de cada cluster denso encontrado.
 
-    Diferente de raio fixo e convex hull, essa abordagem consegue gerar
-    múltiplos "territórios" separados (ex: a casa do tutor + o quintal do
-    vizinho), que é justamente o cenário descrito nos Resultados
-    Esperados (Seção 5.3) onde se espera que ela tenha menor taxa de
+    diferente de raio fixo e convex hull, essa abordagem consegue gerar múltiplos "territórios" separados 
+    (ex: a casa do tutor + o quintal do vizinho), que é justamente o cenário onde se espera que ela tenha menor taxa de
     falsos positivos.
 
-    Limitação conhecida: maior custo computacional; requer histórico
-    mínimo (pontos "ruído", isolados, não formam cluster e ficam de fora
+    limitação conhecida: maior custo computacional; requer histórico mínimo (pontos "ruído", isolados, não formam cluster e ficam de fora
     da zona segura).
     """
 
@@ -69,9 +64,8 @@ class DensidadeDBSCAN(AbordagemGeofencing):
         self, pontos: list[tuple[float, float]]
     ) -> np.ndarray:
         """
-        Projeta (lat, lon) para um plano local em metros, usando o primeiro
-        ponto como origem. Aproximação equirretangular, suficiente para a
-        escala de deslocamento de um pet (não para grandes distâncias).
+        projeta (lat, lon) para um plano local em metros, usando o primeiroponto como origem. aproximação equirretangular, 
+        suficiente para a escala de deslocamento de um pet (não para grandes distâncias).
         """
         lat0, lon0 = pontos[0]
         coordenadas = []
@@ -82,7 +76,7 @@ class DensidadeDBSCAN(AbordagemGeofencing):
         return np.array(coordenadas)
 
     def _hull_do_cluster(self, pontos_do_cluster: list[tuple[float, float]]) -> Polygon:
-        """Convex hull de um único cluster (mesma lógica de degenerescência da ConvexHull)."""
+        """convex hull de um único cluster (mesma lógica de degenerescência da ConvexHull)."""
         multiponto = MultiPoint([(lon, lat) for lat, lon in pontos_do_cluster])
         hull = multiponto.convex_hull
 

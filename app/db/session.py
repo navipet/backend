@@ -10,7 +10,7 @@ Base = declarative_base()
 
 
 def get_db():
-    """Dependency do FastAPI: abre e fecha a sessão a cada request."""
+    """dependency do FastAPI: abre e fecha a sessão a cada request"""
     db = SessionLocal()
     try:
         yield db

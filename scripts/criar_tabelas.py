@@ -1,9 +1,9 @@
 """
-Script simples para criar as tabelas no banco (sem Alembic ainda).
-Use isto no início do projeto; depois migre para Alembic quando
-precisar versionar alterações de schema.
+script simples para criar as tabelas no banco (sem alembic ainda).
+use isto no início do projeto; depois migre para alembic quando
+precisar versionar alterações de schema
 
-Rodar com: python -m scripts.criar_tabelas
+rodar com: python -m scripts.criar_tabelas
 """
 
 from sqlalchemy import text

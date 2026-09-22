@@ -15,8 +15,8 @@ def get_tutor_atual(
     db: Session = Depends(get_db),
 ) -> Tutor:
     """
-    Extrai e valida o tutor autenticado a partir do header
-    'Authorization: Bearer <token>'. Usar como Depends() em qualquer rota
+    extrai e valida o tutor autenticado a partir do header
+    'Authorization: Bearer <token>'. usar como Depends() em qualquer rota
     que deva exigir login.
     """
     try:

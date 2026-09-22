@@ -8,7 +8,7 @@ from app.db.session import Base
 
 
 class Tutor(Base):
-    """Dono do pet -- quem se cadastra e faz login no app."""
+    """dono do pet -- quem se cadastra e faz login no app"""
 
     __tablename__ = "tutores"
 

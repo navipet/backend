@@ -4,7 +4,7 @@ from app.services.comparacao import avaliar_abordagem, comparar_abordagens
 
 
 def _pontos_proximos(n=20):
-    """Pontos bem próximos entre si, simulando um único território denso."""
+    """pontos bem próximos entre si, simulando um único território denso"""
     return [(-5.0892 + i * 0.00001, -42.8016 + i * 0.00001) for i in range(n)]
 
 
@@ -41,7 +41,7 @@ def test_latencia_deteccao_none_quando_fuga_nao_escapa():
 
 
 def test_comparar_abordagens_lida_com_erro_sem_quebrar():
-    """Uma abordagem que falha (ex: densidade sem cluster) não deve derrubar as outras."""
+    """uma abordagem que falha (ex: densidade sem cluster) não deve derrubar as outras"""
     pontos = [(-5.0800, -42.7900), (-5.1200, -42.8300)]
     algoritmos = [RaioFixo(), DensidadeDBSCAN(eps_metros=5.0, min_amostras=5)]
 

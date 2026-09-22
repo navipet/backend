@@ -1,24 +1,19 @@
 """
-Simulador de trajetórias GPS de um pet, na ausência do hardware físico
-(ver Seção 5.2 do pré-projeto: "simulador de trajetórias, na ausência do
-hardware físico durante a fase de testes").
+simulador de trajetórias GPS de um pet, na ausência do hardware físico
 
-O simulador gera um passeio aleatório (random walk) em torno de um
-"território" e, com uma certa probabilidade, alterna para um segundo
-território (ex: quintal do vizinho) -- útil para testar o cenário
-descrito nos Resultados Esperados (Seção 5.3): pets que frequentam
-múltiplos territórios não contíguos, onde se espera que a abordagem de
-densidade supere raio fixo e convex hull.
+o simulador gera um passeio aleatório (random walk) em torno de um "território" e, com uma certa probabilidade, 
+alterna para um segundo território (ex: quintal do vizinho) -- útil para testar o cenário descrito:
+pets que frequentam múltiplos territórios não contíguos, onde se espera que a abordagem de densidade supere raio fixo e convex hull.
 
-Uso básico (enviando direto para a API rodando local):
+uso básico (enviando direto para a API rodando local):
     python -m scripts.simulador_trajetorias --pet-id 1 --num-pontos 300
 
-Gerando um CSV offline, sem precisar da API rodando (bom para testar os
+gerando um CSV offline, sem precisar da API rodando (bom para testar os
 3 algoritmos direto em notebook/script de análise, sem banco):
     python -m scripts.simulador_trajetorias --pet-id 1 --num-pontos 300 \
         --sem-api --output dados_pet_1.csv
 
-Simulando um pet com 2 territórios (ex: casa e casa do vizinho):
+simulando um pet com 2 territórios (ex: casa e casa do vizinho):
     python -m scripts.simulador_trajetorias --pet-id 1 --num-pontos 500 \
         --segundo-lat -5.0910 --segundo-lon -42.8050 \
         --prob-mudanca-territorio 0.02 --sem-api --output dados_pet_1.csv
@@ -34,7 +29,7 @@ import httpx
 
 from app.utils.geo import deslocar_ponto
 
-# Coordenadas padrão: Teresina - PI (mesmo ponto usado nos testes unitários)
+# coordenadas padrão: Teresina - PI (mesmo ponto usado nos testes unitários)
 HOME_LAT_PADRAO = -5.0892
 HOME_LON_PADRAO = -42.8016
 
@@ -49,15 +44,15 @@ def gerar_trajetoria(
     intervalo_minutos: float,
 ) -> list[dict]:
     """
-    Gera uma lista de leituras GPS simuladas, cada uma com
-    (latitude, longitude, timestamp), voltando no tempo a partir de agora.
+    gera uma lista de leituras GPS simuladas, cada uma com
+    (latitude, longitude, timestamp), voltando no tempo a partir de agora
     """
     pontos = []
     centro_atual = (home_lat, home_lon)
     timestamp_atual = datetime.utcnow()
 
     for i in range(num_pontos):
-        # Com uma certa probabilidade, o pet "migra" para o outro território
+        # com uma certa probabilidade, o pet "migra" para o outro território
         if segundo_territorio and random.random() < prob_mudanca_territorio:
             centro_atual = (
                 segundo_territorio
@@ -65,7 +60,7 @@ def gerar_trajetoria(
                 else (home_lat, home_lon)
             )
 
-        # Passeio aleatório: distância e direção aleatórias em torno do centro atual
+        # passeio aleatório: distância e direção aleatórias em torno do centro atual
         distancia = random.gauss(mu=0, sigma=raio_passeio_metros / 2)
         distancia = min(abs(distancia), raio_passeio_metros)
         angulo = random.uniform(0, 2 * math.pi)
@@ -87,7 +82,7 @@ def gerar_trajetoria(
 
 
 def enviar_para_api(pontos: list[dict], api_url: str, pet_id: int) -> None:
-    """Envia cada ponto para a API via POST /pets/{pet_id}/localizacoes."""
+    """envia cada ponto para a API via POST /pets/{pet_id}/localizacoes"""
     with httpx.Client(base_url=api_url, timeout=10.0) as client:
         for i, ponto in enumerate(pontos, start=1):
             resposta = client.post(f"/pets/{pet_id}/localizacoes", json=ponto)
