@@ -1,0 +1,62 @@
+from geoalchemy2.shape import to_shape
+from shapely.geometry import Point
+from sqlalchemy.orm import Session
+
+from app.models.models import Alerta, ZonaSegura
+from app.services.regras_alerta import ABRIR, RESOLVER, decidir_acao_alerta
+
+TIPO_FORA_DA_ZONA = "fora_da_zona"
+
+
+def obter_zona_atual(db: Session, pet_id: int) -> ZonaSegura | None:
+    """ultima zona segura calculada para o pet (ou None se ainda nao houver)"""
+    return (
+        db.query(ZonaSegura)
+        .filter(ZonaSegura.pet_id == pet_id)
+        .order_by(ZonaSegura.criada_em.desc())
+        .first()
+    )
+
+
+def avaliar_posicao(
+    db: Session, pet_id: int, latitude: float, longitude: float
+) -> bool | None:
+    """
+    avalia se uma posicao esta dentro da zona segura atual do pet e
+    atualiza os alertas de acordo: abre um alerta quando o pet sai e o
+    resolve quando ele volta
+
+    retorna True (dentro), False (fora) ou None (o pet ainda nao tem zona
+    calculada, entao nao ha o que avaliar
+    """
+    zona = obter_zona_atual(db, pet_id)
+    if zona is None:
+        return None
+
+    dentro = bool(to_shape(zona.geom).covers(Point(longitude, latitude)))
+
+    alerta_aberto = (
+        db.query(Alerta)
+        .filter(
+            Alerta.pet_id == pet_id,
+            Alerta.tipo == TIPO_FORA_DA_ZONA,
+            Alerta.resolvido.is_(False),
+        )
+        .first()
+    )
+
+    acao = decidir_acao_alerta(dentro, alerta_aberto is not None)
+    if acao == ABRIR:
+        db.add(
+            Alerta(
+                pet_id=pet_id,
+                tipo=TIPO_FORA_DA_ZONA,
+                mensagem=f"Pet saiu da zona segura (abordagem: {zona.abordagem})",
+            )
+        )
+        db.commit()
+    elif acao == RESOLVER:
+        alerta_aberto.resolvido = True
+        db.commit()
+
+    return dentro

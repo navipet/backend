@@ -20,6 +20,7 @@ from app.models.schemas import (
     StatusOut,
     ZonaSeguraOut,
 )
+from app.services.alertas import avaliar_posicao, obter_zona_atual
 
 router = APIRouter(prefix="/pets", tags=["pets"])
 
@@ -36,7 +37,7 @@ def criar_pet(dados: PetCreate, db: Session = Depends(get_db)):
 
 @router.get("", response_model=list[PetOut])
 def listar_pets(tutor_id: int | None = None, db: Session = Depends(get_db)):
-    """lista pets, opcionalmente filtrando por tutor (?tutor_id=123)"""
+    """lista pets, opcionalmente filtrando por tutor (?tutor_id=123)."""
     query = db.query(Pet)
     if tutor_id is not None:
         query = query.filter(Pet.tutor_id == tutor_id)
@@ -55,7 +56,18 @@ def obter_pet(pet_id: int, db: Session = Depends(get_db)):
 def registrar_localizacao(
     pet_id: int, dados: LocalizacaoCreate, db: Session = Depends(get_db)
 ):
-    """recebe uma coordenada GPS do dispositivo/simulador e a armazena"""
+    """
+    recebe uma coordenada GPS do dispositivo/simulador e a armazena
+
+    se o pet ja tem uma zona segura calculada, a posicao eh avaliada na
+    hora: um alerta eh aberto quando ele sai da zona e resolvido quando
+    volta (Seção 5.1-iv do escopo). assim o alerta nao depende de alguém
+    consultar o endpoint de status
+    """
+    pet = db.query(Pet).filter(Pet.id == pet_id).first()
+    if not pet:
+        raise HTTPException(404, "Pet não encontrado")
+
     ponto = Point(dados.longitude, dados.latitude)
 
     localizacao = Localizacao(
@@ -68,14 +80,28 @@ def registrar_localizacao(
     db.add(localizacao)
     db.commit()
     db.refresh(localizacao)
+
+    # so avalia se esta for a leitura mais recente do pet. isso evita
+    # alertas falsos quando leituras antigas sao reenviadas fora de ordem
+    # (ex: o simulador carregando historico)
+    mais_recente = (
+        db.query(Localizacao)
+        .filter(Localizacao.pet_id == pet_id)
+        .order_by(Localizacao.timestamp.desc(), Localizacao.id.desc())
+        .first()
+    )
+    if mais_recente.id == localizacao.id:
+        avaliar_posicao(db, pet_id, localizacao.latitude, localizacao.longitude)
+        db.refresh(localizacao)
+
     return localizacao
 
 
 @router.get("/{pet_id}/historico", response_model=list[LocalizacaoOut])
 def obter_historico(pet_id: int, limite: int = 500, db: Session = Depends(get_db)):
     """
-    retorna o histórico de localizações em ordem cronológica -- usado
-    pelo frontend para desenhar o mapa/heatmap de trajetórias
+    retorna o historico de localizacoes em ordem cronologica, usado
+    pelo frontend para desenhar o mapa/heatmap de trajetorias
     """
     localizacoes = (
         db.query(Localizacao)
@@ -92,7 +118,7 @@ def calcular_zona_segura(
     pet_id: int, abordagem: str = "raio_fixo", db: Session = Depends(get_db)
 ):
     """
-    recalcula a zona segura do pet a partir do histórico de localizações,
+    recalcula a zona segura do pet a partir do historico de localizacoes,
     usando a abordagem indicada (raio_fixo, convex_hull, densidade)
     """
     localizacoes = db.query(Localizacao).filter(Localizacao.pet_id == pet_id).all()
@@ -133,15 +159,10 @@ def calcular_zona_segura(
 @router.get("/{pet_id}/zona-segura", response_model=ZonaSeguraOut)
 def obter_zona_segura(pet_id: int, db: Session = Depends(get_db)):
     """
-    retorna a última zona segura já calculada, sem recalcular -- usado
+    retorna a ultima zona segura ja calculada, sem recalcular -- usado
     pelo frontend para desenhar a zona sobre o mapa
     """
-    zona = (
-        db.query(ZonaSegura)
-        .filter(ZonaSegura.pet_id == pet_id)
-        .order_by(ZonaSegura.criada_em.desc())
-        .first()
-    )
+    zona = obter_zona_atual(db, pet_id)
     if not zona:
         raise HTTPException(404, "Nenhuma zona segura calculada para este pet")
 
@@ -158,10 +179,9 @@ def obter_zona_segura(pet_id: int, db: Session = Depends(get_db)):
 @router.get("/{pet_id}/status", response_model=StatusOut)
 def verificar_status(pet_id: int, db: Session = Depends(get_db)):
     """
-    verifica se a última localização do pet está dentro da zona segura
-
-    efeito colateral (mecanismo de alertas, Seção 5.1-iv do escopo): se o pet está fora da zona e não existe um alerta em aberto, cria um.
-    se ele está dentro e havia um alerta em aberto, marca como resolvido automaticamente (o pet "voltou" para a zona segura)
+    informa se a ultima localizacao do pet ta dentro da zona segura.
+    usa a mesma avaliacao do registro de localizacao, então eh seguro
+    chamar repetidamente (nao duplica alertas)
     """
     ultima_localizacao = (
         db.query(Localizacao)
@@ -172,40 +192,13 @@ def verificar_status(pet_id: int, db: Session = Depends(get_db)):
     if not ultima_localizacao:
         raise HTTPException(404, "Nenhuma localização encontrada para este pet")
 
-    zona = (
-        db.query(ZonaSegura)
-        .filter(ZonaSegura.pet_id == pet_id)
-        .order_by(ZonaSegura.criada_em.desc())
-        .first()
-    )
+    zona = obter_zona_atual(db, pet_id)
     if not zona:
         raise HTTPException(404, "Nenhuma zona segura calculada para este pet")
 
-    poligono_zona = to_shape(zona.geom)
-    ponto_atual = Point(ultima_localizacao.longitude, ultima_localizacao.latitude)
-    dentro = poligono_zona.covers(ponto_atual)
-
-    alerta_aberto = (
-        db.query(Alerta)
-        .filter(
-            Alerta.pet_id == pet_id,
-            Alerta.tipo == "fora_da_zona",
-            Alerta.resolvido.is_(False),
-        )
-        .first()
+    dentro = avaliar_posicao(
+        db, pet_id, ultima_localizacao.latitude, ultima_localizacao.longitude
     )
-
-    if not dentro and not alerta_aberto:
-        novo_alerta = Alerta(
-            pet_id=pet_id,
-            tipo="fora_da_zona",
-            mensagem=f"Pet saiu da zona segura (abordagem: {zona.abordagem})",
-        )
-        db.add(novo_alerta)
-        db.commit()
-    elif dentro and alerta_aberto:
-        alerta_aberto.resolvido = True
-        db.commit()
 
     return StatusOut(
         pet_id=pet_id,
@@ -218,7 +211,7 @@ def verificar_status(pet_id: int, db: Session = Depends(get_db)):
 def listar_alertas(
     pet_id: int, apenas_nao_resolvidos: bool = False, db: Session = Depends(get_db)
 ):
-    """lista o histórico de alertas do pet (mais recentes primeiro)"""
+    """lista o historico de alertas do pet (mais recentes primeiro)"""
     query = db.query(Alerta).filter(Alerta.pet_id == pet_id)
     if apenas_nao_resolvidos:
         query = query.filter(Alerta.resolvido.is_(False))
