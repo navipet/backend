@@ -12,9 +12,16 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
     # chave usada para assinar os tokens JWT de login. valor diferente em produção
-    # (SECRET_KEY definida como variável de ambiente) -- nunca deixe o valor
-    # padrão em um ambiente real.
+    # (defina SECRET_KEY como variável de ambiente) -- nunca deixe o valor
+    # padrão em um ambiente real
     secret_key: str = "troque-esta-chave-em-producao"
+
+    # recalculo automatico da zona segura conforme o histórico cresce
+    # cada campo pode ser sobrescrito por variável de ambiente (ex: ZONA_AUTO_HABILITADA=false desliga o recálculo automático).
+    zona_auto_habilitada: bool = True
+    zona_abordagem_padrao: str = "densidade"
+    zona_min_pontos: int = 30
+    zona_intervalo_recalculo: int = 50
 
     class Config:
         env_file = ".env"

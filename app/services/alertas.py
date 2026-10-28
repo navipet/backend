@@ -18,6 +18,20 @@ def obter_zona_atual(db: Session, pet_id: int) -> ZonaSegura | None:
     )
 
 
+def ha_alerta_aberto(db: Session, pet_id: int) -> bool:
+    """True se o pet tem um alerta de 'fora da zona' ainda nao resolvido"""
+    return (
+        db.query(Alerta)
+        .filter(
+            Alerta.pet_id == pet_id,
+            Alerta.tipo == TIPO_FORA_DA_ZONA,
+            Alerta.resolvido.is_(False),
+        )
+        .first()
+        is not None
+    )
+
+
 def avaliar_posicao(
     db: Session, pet_id: int, latitude: float, longitude: float
 ) -> bool | None:
@@ -27,7 +41,7 @@ def avaliar_posicao(
     resolve quando ele volta
 
     retorna True (dentro), False (fora) ou None (o pet ainda nao tem zona
-    calculada, entao nao ha o que avaliar
+    calculada, entao nao ha o que avaliar)
     """
     zona = obter_zona_atual(db, pet_id)
     if zona is None:
