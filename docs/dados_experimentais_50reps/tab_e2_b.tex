@@ -1,0 +1,18 @@
+\begin{table}[H]
+\centering
+\caption{Métricas geométricas contra o território verdadeiro -- dois territórios não contíguos (vizinho a 400\,m) (média $\pm$ desvio padrão em 50 repetições).}
+\label{tab:e2_b}
+\footnotesize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|l|c|c|c|c|c|}
+\hline
+\textbf{Abordagem} & \textbf{Área (m$^2$)} & \textbf{IoU} & \textbf{Cobertura da área real} & \textbf{Área excedente (×)} & \textbf{Tempo (ms)} \\
+\hline
+Raio fixo & 31214 $\pm$ 0 & 0,01 $\pm$ 0,02 & 0,05 $\pm$ 0,14 & 5,5 $\pm$ 0,1 & 0,19 $\pm$ 0,02 \\
+\hline
+Convex hull & 25224 $\pm$ 839 & 0,20 $\pm$ 0,01 & 0,92 $\pm$ 0,04 & 3,5 $\pm$ 0,1 & 9,19 $\pm$ 0,14 \\
+\hline
+DBSCAN & 4773 $\pm$ 264 & 0,84 $\pm$ 0,05 & 0,84 $\pm$ 0,05 & 0,0 $\pm$ 0,0 & 15,30 $\pm$ 0,35 \\
+\hline
+\end{tabular}}
+\end{table}

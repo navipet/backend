@@ -1,0 +1,18 @@
+\begin{table}[H]
+\centering
+\caption{Métricas geométricas contra o território verdadeiro -- território único (média $\pm$ desvio padrão em 50 repetições).}
+\label{tab:e1_b}
+\footnotesize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|l|c|c|c|c|c|}
+\hline
+\textbf{Abordagem} & \textbf{Área (m$^2$)} & \textbf{IoU} & \textbf{Cobertura da área real} & \textbf{Área excedente (×)} & \textbf{Tempo (ms)} \\
+\hline
+Raio fixo & 31214 $\pm$ 0 & 0,09 $\pm$ 0,00 & 1,00 $\pm$ 0,00 & 10,0 $\pm$ 0,0 & 0,21 $\pm$ 0,06 \\
+\hline
+Convex hull & 2645 $\pm$ 80 & 0,94 $\pm$ 0,03 & 0,94 $\pm$ 0,03 & 0,0 $\pm$ 0,0 & 10,51 $\pm$ 1,39 \\
+\hline
+DBSCAN & 2645 $\pm$ 80 & 0,94 $\pm$ 0,03 & 0,94 $\pm$ 0,03 & 0,0 $\pm$ 0,0 & 19,18 $\pm$ 2,29 \\
+\hline
+\end{tabular}}
+\end{table}
