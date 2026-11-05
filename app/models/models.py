@@ -1,7 +1,18 @@
 from datetime import datetime
 
 from geoalchemy2 import Geometry
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    Numeric,
+    SmallInteger,
+    String,
+)
 from sqlalchemy.orm import relationship
 
 from app.db.session import Base
@@ -70,3 +81,29 @@ class Alerta(Base):
     resolvido = Column(Boolean, default=False, nullable=False)
 
     pet = relationship("Pet", back_populates="alertas")
+
+
+class Antena(Base):
+    """antena fixa (ESP) usada para estimar a posição da tag do pet por RSSI.
+
+    Cada antena busca uma única vez, ao ligar, a própria posição e os parâmetros
+    de cálculo de distância (GET /antena/{mac}).
+    """
+
+    __tablename__ = "antenas"
+
+    # MAC normalizado em maiúsculas: AA:BB:CC:DD:EE:FF
+    endereco_mac = Column(String(17), primary_key=True)
+    latitude = Column(Numeric(11, 8, asdecimal=False), nullable=False)
+    longitude = Column(Numeric(11, 8, asdecimal=False), nullable=False)
+    # RSSI (dBm) medido a 1 metro da tag
+    rssi_referencia = Column(SmallInteger, nullable=False)
+    # expoente de perda de percurso do ambiente (~2 em espaço aberto, 3 a 4 com obstáculos)
+    expoente_perda = Column(Numeric(4, 2, asdecimal=False), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("latitude BETWEEN -90 AND 90", name="ck_antenas_latitude_valida"),
+        CheckConstraint("longitude BETWEEN -180 AND 180", name="ck_antenas_longitude_valida"),
+        CheckConstraint("rssi_referencia BETWEEN -127 AND 0", name="ck_antenas_rssi_valido"),
+        CheckConstraint("expoente_perda > 0", name="ck_antenas_expoente_positivo"),
+    )

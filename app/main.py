@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import pets, tutores
+from app.api import antenas, pets, tutores
 from app.core.config import settings
 
 app = FastAPI(
@@ -20,6 +20,7 @@ app.add_middleware(
 
 app.include_router(tutores.router)
 app.include_router(pets.router)
+app.include_router(antenas.router)
 
 
 @app.get("/health")

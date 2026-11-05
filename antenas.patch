@@ -1,0 +1,480 @@
+diff --git a/alembic/versions/0003_antenas.py b/alembic/versions/0003_antenas.py
+new file mode 100644
+index 0000000..542e23b
+--- /dev/null
++++ b/alembic/versions/0003_antenas.py
+@@ -0,0 +1,33 @@
++"""adiciona tabela antenas (posicionamento por RSSI)
++
++Revision ID: 0003
++Revises: 0002
++Create Date: 2026-11-04
++
++"""
++import sqlalchemy as sa
++from alembic import op
++
++revision = "0003"
++down_revision = "0002"
++branch_labels = None
++depends_on = None
++
++
++def upgrade() -> None:
++    op.create_table(
++        "antenas",
++        sa.Column("endereco_mac", sa.String(17), primary_key=True),
++        sa.Column("latitude", sa.Numeric(11, 8), nullable=False),
++        sa.Column("longitude", sa.Numeric(11, 8), nullable=False),
++        sa.Column("rssi_referencia", sa.SmallInteger(), nullable=False),
++        sa.Column("expoente_perda", sa.Numeric(4, 2), nullable=False),
++        sa.CheckConstraint("latitude BETWEEN -90 AND 90", name="ck_antenas_latitude_valida"),
++        sa.CheckConstraint("longitude BETWEEN -180 AND 180", name="ck_antenas_longitude_valida"),
++        sa.CheckConstraint("rssi_referencia BETWEEN -127 AND 0", name="ck_antenas_rssi_valido"),
++        sa.CheckConstraint("expoente_perda > 0", name="ck_antenas_expoente_positivo"),
++    )
++
++
++def downgrade() -> None:
++    op.drop_table("antenas")
+diff --git a/app/api/antenas.py b/app/api/antenas.py
+new file mode 100644
+index 0000000..645cca7
+--- /dev/null
++++ b/app/api/antenas.py
+@@ -0,0 +1,97 @@
++import logging
++
++from fastapi import APIRouter, Depends, HTTPException
++from sqlalchemy.exc import IntegrityError, SQLAlchemyError
++from sqlalchemy.orm import Session
++
++from app.db.session import get_db
++from app.models.models import Antena
++from app.models.schemas import AntenaConfig, AntenaCreate, AntenaListaOut, AntenaOut
++from app.utils.mac import normalizar_mac
++
++logger = logging.getLogger(__name__)
++
++router = APIRouter(prefix="/antena", tags=["antenas"])
++
++
++def _mac_ou_422(valor: str) -> str:
++    try:
++        return normalizar_mac(valor)
++    except ValueError as erro:
++        raise HTTPException(status_code=422, detail=str(erro))
++
++
++def _antena_ou_404(db: Session, endereco_mac: str) -> Antena:
++    antena = db.get(Antena, _mac_ou_422(endereco_mac))
++    if antena is None:
++        raise HTTPException(status_code=404, detail="Antena não encontrada")
++    return antena
++
++
++def _gravar(db: Session) -> None:
++    """commit com tratamento: qualquer falha no banco vira erro 500 com rollback"""
++    try:
++        db.commit()
++    except SQLAlchemyError:
++        db.rollback()
++        logger.exception("falha ao gravar antena no banco")
++        raise HTTPException(status_code=500, detail="Erro ao gravar a antena no banco de dados")
++
++
++@router.post("", response_model=AntenaOut, status_code=201)
++def criar_antena(dados: AntenaCreate, db: Session = Depends(get_db)):
++    """cadastra uma antena; 409 se já existir uma com o mesmo MAC"""
++    if db.get(Antena, dados.endereco_mac) is not None:
++        raise HTTPException(status_code=409, detail="Já existe uma antena com este endereço MAC")
++
++    antena = Antena(**dados.model_dump())
++    db.add(antena)
++    try:
++        db.commit()
++    except IntegrityError:
++        # duas requisições simultâneas com o mesmo MAC: a segunda cai aqui
++        db.rollback()
++        if db.get(Antena, dados.endereco_mac) is not None:
++            raise HTTPException(status_code=409, detail="Já existe uma antena com este endereço MAC")
++        logger.exception("violação de integridade ao criar antena")
++        raise HTTPException(status_code=500, detail="Erro ao gravar a antena no banco de dados")
++    except SQLAlchemyError:
++        db.rollback()
++        logger.exception("falha ao criar antena")
++        raise HTTPException(status_code=500, detail="Erro ao gravar a antena no banco de dados")
++
++    db.refresh(antena)
++    return antena
++
++
++@router.get("", response_model=AntenaListaOut)
++def listar_antenas(db: Session = Depends(get_db)):
++    """lista todas as antenas cadastradas"""
++    antenas = db.query(Antena).order_by(Antena.endereco_mac).all()
++    return {"antenas": antenas}
++
++
++@router.get("/{endereco_mac}", response_model=AntenaConfig)
++def obter_antena(endereco_mac: str, db: Session = Depends(get_db)):
++    """devolve posição e parâmetros de uma antena (a antena chama isto uma vez, ao ligar)"""
++    return _antena_ou_404(db, endereco_mac)
++
++
++@router.put("/{endereco_mac}", response_model=AntenaOut)
++def atualizar_antena(endereco_mac: str, dados: AntenaConfig, db: Session = Depends(get_db)):
++    """atualiza posição e parâmetros; a antena só passa a usá-los na próxima vez que ligar"""
++    antena = _antena_ou_404(db, endereco_mac)
++    for campo, valor in dados.model_dump().items():
++        setattr(antena, campo, valor)
++    _gravar(db)
++    db.refresh(antena)
++    return antena
++
++
++@router.delete("/{endereco_mac}")
++def remover_antena(endereco_mac: str, db: Session = Depends(get_db)):
++    """remove uma antena"""
++    antena = _antena_ou_404(db, endereco_mac)
++    db.delete(antena)
++    _gravar(db)
++    return {"mensagem": "Antena removida"}
+diff --git a/app/main.py b/app/main.py
+index 7a0beb1..988b6c9 100644
+--- a/app/main.py
++++ b/app/main.py
+@@ -1,7 +1,7 @@
+ from fastapi import FastAPI
+ from fastapi.middleware.cors import CORSMiddleware
+ 
+-from app.api import pets, tutores
++from app.api import antenas, pets, tutores
+ from app.core.config import settings
+ 
+ app = FastAPI(
+@@ -20,6 +20,7 @@ app.add_middleware(
+ 
+ app.include_router(tutores.router)
+ app.include_router(pets.router)
++app.include_router(antenas.router)
+ 
+ 
+ @app.get("/health")
+diff --git a/app/models/models.py b/app/models/models.py
+index 516715a..4bbe53a 100644
+--- a/app/models/models.py
++++ b/app/models/models.py
+@@ -1,7 +1,18 @@
+ from datetime import datetime
+ 
+ from geoalchemy2 import Geometry
+-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String
++from sqlalchemy import (
++    Boolean,
++    CheckConstraint,
++    Column,
++    DateTime,
++    Float,
++    ForeignKey,
++    Integer,
++    Numeric,
++    SmallInteger,
++    String,
++)
+ from sqlalchemy.orm import relationship
+ 
+ from app.db.session import Base
+@@ -69,4 +80,30 @@ class Alerta(Base):
+     criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)
+     resolvido = Column(Boolean, default=False, nullable=False)
+ 
+-    pet = relationship("Pet", back_populates="alertas")
+\ No newline at end of file
++    pet = relationship("Pet", back_populates="alertas")
++
++
++class Antena(Base):
++    """antena fixa (ESP) usada para estimar a posição da tag do pet por RSSI.
++
++    Cada antena busca uma única vez, ao ligar, a própria posição e os parâmetros
++    de cálculo de distância (GET /antena/{mac}).
++    """
++
++    __tablename__ = "antenas"
++
++    # MAC normalizado em maiúsculas: AA:BB:CC:DD:EE:FF
++    endereco_mac = Column(String(17), primary_key=True)
++    latitude = Column(Numeric(11, 8, asdecimal=False), nullable=False)
++    longitude = Column(Numeric(11, 8, asdecimal=False), nullable=False)
++    # RSSI (dBm) medido a 1 metro da tag
++    rssi_referencia = Column(SmallInteger, nullable=False)
++    # expoente de perda de percurso do ambiente (~2 em espaço aberto, 3 a 4 com obstáculos)
++    expoente_perda = Column(Numeric(4, 2, asdecimal=False), nullable=False)
++
++    __table_args__ = (
++        CheckConstraint("latitude BETWEEN -90 AND 90", name="ck_antenas_latitude_valida"),
++        CheckConstraint("longitude BETWEEN -180 AND 180", name="ck_antenas_longitude_valida"),
++        CheckConstraint("rssi_referencia BETWEEN -127 AND 0", name="ck_antenas_rssi_valido"),
++        CheckConstraint("expoente_perda > 0", name="ck_antenas_expoente_positivo"),
++    )
+diff --git a/app/models/schemas.py b/app/models/schemas.py
+index 9fc82f2..4094e3d 100644
+--- a/app/models/schemas.py
++++ b/app/models/schemas.py
+@@ -1,6 +1,8 @@
+ from datetime import datetime
+ 
+-from pydantic import BaseModel, EmailStr, Field
++from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
++
++from app.utils.mac import normalizar_mac
+ 
+ 
+ class TutorCreate(BaseModel):
+@@ -86,4 +88,32 @@ class AlertaOut(BaseModel):
+     resolvido: bool
+ 
+     class Config:
+-        from_attributes = True
+\ No newline at end of file
++        from_attributes = True
++
++
++class AntenaConfig(BaseModel):
++    """posição e parâmetros de cálculo de uma antena (corpo do PUT e resposta do GET por MAC)"""
++
++    model_config = ConfigDict(from_attributes=True)
++
++    latitude: float = Field(..., ge=-90, le=90)
++    longitude: float = Field(..., ge=-180, le=180)
++    rssi_referencia: int = Field(..., ge=-127, le=0)
++    expoente_perda: float = Field(..., gt=0, le=99.99)
++
++
++class AntenaCreate(AntenaConfig):
++    endereco_mac: str
++
++    @field_validator("endereco_mac")
++    @classmethod
++    def _normalizar_mac(cls, valor: str) -> str:
++        return normalizar_mac(valor)
++
++
++class AntenaOut(AntenaConfig):
++    endereco_mac: str
++
++
++class AntenaListaOut(BaseModel):
++    antenas: list[AntenaOut]
+diff --git a/app/utils/mac.py b/app/utils/mac.py
+new file mode 100644
+index 0000000..429b553
+--- /dev/null
++++ b/app/utils/mac.py
+@@ -0,0 +1,18 @@
++import re
++
++_SEPARADORES = re.compile(r"[:\-.\s]")
++_HEX_12 = re.compile(r"^[0-9A-F]{12}$")
++
++
++def normalizar_mac(valor: str) -> str:
++    """Normaliza um endereço MAC para o formato AA:BB:CC:DD:EE:FF.
++
++    Aceita separadores ':', '-' ou '.', letras maiúsculas ou minúsculas, ou sem
++    separador (aabbccddeeff). Levanta ValueError se não tiver exatamente 12 dígitos
++    hexadecimais. Assim a mesma antena é sempre reconhecida, não importa como o
++    firmware formata o MAC.
++    """
++    limpo = _SEPARADORES.sub("", valor.strip()).upper()
++    if not _HEX_12.match(limpo):
++        raise ValueError("endereço MAC inválido (esperado 12 dígitos hexadecimais)")
++    return ":".join(limpo[i : i + 2] for i in range(0, 12, 2))
+diff --git a/tests/test_antenas_api.py b/tests/test_antenas_api.py
+new file mode 100644
+index 0000000..0415f5c
+--- /dev/null
++++ b/tests/test_antenas_api.py
+@@ -0,0 +1,148 @@
++"""testes das rotas /antena com SQLite em memória (só a tabela de antenas, sem PostGIS)"""
++import pytest
++from fastapi.testclient import TestClient
++from sqlalchemy import create_engine
++from sqlalchemy.orm import sessionmaker
++from sqlalchemy.pool import StaticPool
++
++from app.db.session import get_db
++from app.main import app
++from app.models.models import Antena
++
++MAC = "AA:BB:CC:DD:EE:01"
++CORPO = {
++    "endereco_mac": MAC,
++    "latitude": -5.0892,
++    "longitude": -42.8019,
++    "rssi_referencia": -59,
++    "expoente_perda": 2.5,
++}
++
++
++@pytest.fixture()
++def client():
++    engine = create_engine(
++        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
++    )
++    Antena.__table__.create(engine)
++    Sessao = sessionmaker(bind=engine, autocommit=False, autoflush=False)
++
++    def _db():
++        db = Sessao()
++        try:
++            yield db
++        finally:
++            db.close()
++
++    app.dependency_overrides[get_db] = _db
++    yield TestClient(app)
++    app.dependency_overrides.clear()
++
++
++def test_criar_antena_devolve_201_e_dados(client):
++    r = client.post("/antena", json=CORPO)
++    assert r.status_code == 201
++    assert r.json() == CORPO
++
++
++def test_mac_e_normalizado_ao_criar(client):
++    r = client.post("/antena", json={**CORPO, "endereco_mac": "aa-bb-cc-dd-ee-01"})
++    assert r.status_code == 201
++    assert r.json()["endereco_mac"] == MAC
++
++
++def test_mac_duplicado_devolve_409_mesmo_com_formato_diferente(client):
++    client.post("/antena", json=CORPO)
++    r = client.post("/antena", json={**CORPO, "endereco_mac": "aabbccddee01"})
++    assert r.status_code == 409
++
++
++def test_criar_com_mac_invalido_devolve_422(client):
++    r = client.post("/antena", json={**CORPO, "endereco_mac": "xyz"})
++    assert r.status_code == 422
++
++
++@pytest.mark.parametrize(
++    "campo,valor",
++    [
++        ("latitude", 91),
++        ("latitude", -91),
++        ("longitude", 181),
++        ("rssi_referencia", 1),
++        ("rssi_referencia", -128),
++        ("expoente_perda", 0),
++        ("expoente_perda", -1),
++    ],
++)
++def test_valores_fora_da_faixa_devolvem_422(client, campo, valor):
++    r = client.post("/antena", json={**CORPO, campo: valor})
++    assert r.status_code == 422
++
++
++def test_listar_vazio(client):
++    r = client.get("/antena")
++    assert r.status_code == 200
++    assert r.json() == {"antenas": []}
++
++
++def test_listar_devolve_todas_com_mac(client):
++    client.post("/antena", json=CORPO)
++    client.post("/antena", json={**CORPO, "endereco_mac": "AA:BB:CC:DD:EE:02"})
++    r = client.get("/antena")
++    assert r.status_code == 200
++    macs = [a["endereco_mac"] for a in r.json()["antenas"]]
++    assert macs == ["AA:BB:CC:DD:EE:01", "AA:BB:CC:DD:EE:02"]
++
++
++def test_obter_por_mac_devolve_so_os_quatro_campos_do_contrato(client):
++    client.post("/antena", json=CORPO)
++    r = client.get(f"/antena/{MAC}")
++    assert r.status_code == 200
++    assert r.json() == {
++        "latitude": -5.0892,
++        "longitude": -42.8019,
++        "rssi_referencia": -59,
++        "expoente_perda": 2.5,
++    }
++
++
++def test_obter_aceita_mac_em_minusculas(client):
++    client.post("/antena", json=CORPO)
++    assert client.get("/antena/aa:bb:cc:dd:ee:01").status_code == 200
++
++
++def test_obter_inexistente_devolve_404(client):
++    assert client.get(f"/antena/{MAC}").status_code == 404
++
++
++def test_obter_com_mac_invalido_devolve_422(client):
++    assert client.get("/antena/xyz").status_code == 422
++
++
++def test_atualizar_persiste_os_novos_valores(client):
++    client.post("/antena", json=CORPO)
++    novo = {"latitude": -5.1, "longitude": -42.9, "rssi_referencia": -62, "expoente_perda": 3.0}
++    r = client.put(f"/antena/{MAC}", json=novo)
++    assert r.status_code == 200
++    assert client.get(f"/antena/{MAC}").json() == novo
++
++
++def test_atualizar_inexistente_devolve_404(client):
++    novo = {"latitude": -5.1, "longitude": -42.9, "rssi_referencia": -62, "expoente_perda": 3.0}
++    assert client.put(f"/antena/{MAC}", json=novo).status_code == 404
++
++
++def test_atualizar_com_valor_invalido_devolve_422(client):
++    client.post("/antena", json=CORPO)
++    novo = {"latitude": 200, "longitude": -42.9, "rssi_referencia": -62, "expoente_perda": 3.0}
++    assert client.put(f"/antena/{MAC}", json=novo).status_code == 422
++
++
++def test_remover_devolve_200_e_antena_some(client):
++    client.post("/antena", json=CORPO)
++    assert client.delete(f"/antena/{MAC}").status_code == 200
++    assert client.get(f"/antena/{MAC}").status_code == 404
++
++
++def test_remover_inexistente_devolve_404(client):
++    assert client.delete(f"/antena/{MAC}").status_code == 404
+diff --git a/tests/test_mac.py b/tests/test_mac.py
+new file mode 100644
+index 0000000..d1a07e8
+--- /dev/null
++++ b/tests/test_mac.py
+@@ -0,0 +1,27 @@
++import pytest
++
++from app.utils.mac import normalizar_mac
++
++
++@pytest.mark.parametrize(
++    "entrada",
++    [
++        "AA:BB:CC:DD:EE:FF",
++        "aa:bb:cc:dd:ee:ff",
++        "aa-bb-cc-dd-ee-ff",
++        "aabb.ccdd.eeff",
++        "aabbccddeeff",
++        "  AA:BB:CC:DD:EE:FF  ",
++    ],
++)
++def test_formatos_validos_viram_o_mesmo_mac_normalizado(entrada):
++    assert normalizar_mac(entrada) == "AA:BB:CC:DD:EE:FF"
++
++
++@pytest.mark.parametrize(
++    "entrada",
++    ["", "AA:BB:CC:DD:EE", "AA:BB:CC:DD:EE:FF:00", "GG:BB:CC:DD:EE:FF", "não é um mac"],
++)
++def test_mac_invalido_levanta_erro(entrada):
++    with pytest.raises(ValueError):
++        normalizar_mac(entrada)
