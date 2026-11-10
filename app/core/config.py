@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     zona_min_pontos: int = 30
     zona_intervalo_recalculo: int = 50
 
+    # filtro de persistencia: quantas leituras SEGUIDAS fora da zona sao
+    # necessarias para abrir um alerta. com leituras a cada 2 s, 5 = ~10 s
+    # de atraso. 1 = comportamento antigo (uma leitura fora ja abre)
+    # (env: ALERTA_LEITURAS_CONSECUTIVAS)
+    alerta_leituras_consecutivas: int = 5
+
     class Config:
         env_file = ".env"
 

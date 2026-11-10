@@ -38,6 +38,10 @@ class Pet(Base):
     id = Column(Integer, primary_key=True, index=True)
     nome = Column(String, nullable=False)
     tutor_id = Column(Integer, ForeignKey("tutores.id"), nullable=False, index=True)
+    # filtro de persistencia dos alertas: leituras seguidas fora da zona
+    leituras_fora_consecutivas = Column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
     tutor = relationship("Tutor", back_populates="pets")
     localizacoes = relationship("Localizacao", back_populates="pet")

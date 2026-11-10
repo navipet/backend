@@ -2,8 +2,14 @@ from geoalchemy2.shape import to_shape
 from shapely.geometry import Point
 from sqlalchemy.orm import Session
 
-from app.models.models import Alerta, ZonaSegura
-from app.services.regras_alerta import ABRIR, RESOLVER, decidir_acao_alerta
+from app.core.config import settings
+from app.models.models import Alerta, Pet, ZonaSegura
+from app.services.regras_alerta import (
+    ABRIR,
+    RESOLVER,
+    atualizar_contador_fora,
+    decidir_acao_alerta,
+)
 
 TIPO_FORA_DA_ZONA = "fora_da_zona"
 
@@ -33,12 +39,21 @@ def ha_alerta_aberto(db: Session, pet_id: int) -> bool:
 
 
 def avaliar_posicao(
-    db: Session, pet_id: int, latitude: float, longitude: float
+    db: Session,
+    pet_id: int,
+    latitude: float,
+    longitude: float,
+    nova_leitura: bool = True,
 ) -> bool | None:
     """
     avalia se uma posicao esta dentro da zona segura atual do pet e
-    atualiza os alertas de acordo: abre um alerta quando o pet sai e o
-    resolve quando ele volta
+    atualiza os alertas de acordo: abre um alerta quando o pet fica fora
+    por `settings.alerta_leituras_consecutivas` leituras seguidas (filtro
+    de persistencia) e o resolve quando ele volta
+
+    `nova_leitura=False` reavalia sem mexer no contador -- usado pelo
+    endpoint de status, que reavalia sempre a mesma ultima leitura e nao
+    pode conta-la de novo a cada chamada
 
     retorna True (dentro), False (fora) ou None (o pet ainda nao tem zona
     calculada, entao nao ha o que avaliar)
@@ -48,6 +63,14 @@ def avaliar_posicao(
         return None
 
     dentro = bool(to_shape(zona.geom).covers(Point(longitude, latitude)))
+
+    pet = db.get(Pet, pet_id)
+    if nova_leitura:
+        pet.leituras_fora_consecutivas = atualizar_contador_fora(
+            dentro, pet.leituras_fora_consecutivas or 0
+        )
+    elif dentro:
+        pet.leituras_fora_consecutivas = 0
 
     alerta_aberto = (
         db.query(Alerta)
@@ -59,7 +82,12 @@ def avaliar_posicao(
         .first()
     )
 
-    acao = decidir_acao_alerta(dentro, alerta_aberto is not None)
+    acao = decidir_acao_alerta(
+        dentro,
+        alerta_aberto is not None,
+        leituras_fora_consecutivas=pet.leituras_fora_consecutivas,
+        limiar=settings.alerta_leituras_consecutivas,
+    )
     if acao == ABRIR:
         db.add(
             Alerta(
@@ -68,9 +96,8 @@ def avaliar_posicao(
                 mensagem=f"Pet saiu da zona segura (abordagem: {zona.abordagem})",
             )
         )
-        db.commit()
     elif acao == RESOLVER:
         alerta_aberto.resolvido = True
-        db.commit()
+    db.commit()
 
     return dentro

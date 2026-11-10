@@ -191,7 +191,11 @@ def verificar_status(pet_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Nenhuma zona segura calculada para este pet")
 
     dentro = avaliar_posicao(
-        db, pet_id, ultima_localizacao.latitude, ultima_localizacao.longitude
+        db,
+        pet_id,
+        ultima_localizacao.latitude,
+        ultima_localizacao.longitude,
+        nova_leitura=False,
     )
 
     return StatusOut(
