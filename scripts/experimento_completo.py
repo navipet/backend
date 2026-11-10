@@ -5,7 +5,8 @@ diferenças em relação ao scripts/rodar_comparacao.py (que faz UMA rodada):
 - sementes fixas (reprodutível: mesma semente => mesmos números)
 - N repetições por cenário, reportando média, desvio padrão e IC 95%
 - vários cenários: território único, 2 territórios, tamanho do histórico,
-  distância entre territórios, outliers de GPS, sensibilidade a parâmetros
+  distância entre territórios, outliers de GPS, sensibilidade a parâmetros,
+  ruído de posição (E7: erro gaussiano em TODAS as leituras, p.ex. RSSI)
 - métricas extras que usam o "gabarito" do simulador (a gente SABE onde
   ficam os territórios verdadeiros): área da zona, IoU e pior direção de fuga
 - salva tudo em disco: CSV bruto, CSV resumido, testes estatísticos,
@@ -16,6 +17,7 @@ uso (a partir da pasta backend/, com a venv ativa):
     python -m scripts.experimento_completo                     # experimento completo (30 reps)
     python -m scripts.experimento_completo --reps 50 --seed-base 1000
     python -m scripts.experimento_completo --experimentos e1 e2 --rodar-testes
+    python -m scripts.experimento_completo --experimentos e7 --saida docs/dados_e7   # só o E7
 
 saída padrão: docs/dados_experimentais/
 """
@@ -79,11 +81,15 @@ class Cenario:
     distancia_segundo_m: float | None = None  # None => território único
     prob_mudanca: float = 0.03
     prop_outliers: float = 0.0
+    sigma_ruido_m: float = 0.0  # E7: desvio padrão do erro gaussiano por eixo (m), em todas as leituras
     raio_passeio_m: float = 30.0
     intervalo_min: float = 5.0
     raio_fixo_m: float = 100.0
     eps_m: float = 50.0
     min_amostras: int = 5
+
+
+SIGMAS_RUIDO_M = [0, 2, 5, 10, 15]  # desvio padrão por eixo; erro radial médio = 1,25 x sigma
 
 
 def montar_cenarios(experimentos: list[str]) -> list[Cenario]:
@@ -119,6 +125,11 @@ def montar_cenarios(experimentos: list[str]) -> list[Cenario]:
                 cenarios.append(
                     replace(base2, experimento="e6d", nome=f"e6d_eps={eps}_ms={ms}", eps_m=float(eps), min_amostras=ms)
                 )
+    if "e7" in experimentos:  # ruído de posição em todas as leituras (ex.: RSSI)
+        for s in SIGMAS_RUIDO_M:
+            cenarios.append(replace(base1, experimento="e7a", nome=f"e7a_s={s:g}", sigma_ruido_m=float(s)))
+        for s in SIGMAS_RUIDO_M:
+            cenarios.append(replace(base2, experimento="e7b", nome=f"e7b_s={s:g}", sigma_ruido_m=float(s)))
     return cenarios
 
 
@@ -160,6 +171,15 @@ def gerar_historico(cfg: Cenario, seed: int):
                 dist = rng.uniform(100, 300)
                 ang = rng.uniform(0, 2 * math.pi)
                 pontos[i] = deslocar_ponto(lat, lon, dist, ang)
+
+    if cfg.sigma_ruido_m > 0:
+        # E7: erro gaussiano independente em x e y, em TODAS as leituras (treino e teste).
+        # gerador separado: a trajetória base é idêntica entre níveis de ruído
+        rng = random.Random(seed + 20_000)
+        for i, (lat, lon) in enumerate(pontos):
+            dx = rng.gauss(0, cfg.sigma_ruido_m)  # leste (m)
+            dy = rng.gauss(0, cfg.sigma_ruido_m)  # norte (m)
+            pontos[i] = deslocar_ponto(lat, lon, math.hypot(dx, dy), math.atan2(dx, dy))
 
     centros = [HOME] + ([segundo] if segundo else [])
     return pontos, centros
@@ -221,6 +241,7 @@ def avaliar_repeticao(cfg: Cenario, seed: int) -> list[dict]:
             "num_pontos": cfg.num_pontos,
             "distancia_segundo_m": cfg.distancia_segundo_m or 0,
             "prop_outliers": cfg.prop_outliers,
+            "sigma_ruido_m": cfg.sigma_ruido_m,
             "raio_fixo_m": cfg.raio_fixo_m,
             "eps_m": cfg.eps_m,
             "min_amostras": cfg.min_amostras,
@@ -297,7 +318,7 @@ def agregar(brutos: list[dict]) -> dict:
         entrada["params"] = {
             k: linhas[0][k]
             for k in ("experimento", "num_pontos", "distancia_segundo_m",
-                      "prop_outliers", "raio_fixo_m", "eps_m", "min_amostras")
+                      "prop_outliers", "sigma_ruido_m", "raio_fixo_m", "eps_m", "min_amostras")
         }
         resumo[chave] = entrada
     return resumo
@@ -449,6 +470,33 @@ def gerar_tabela_testes(testes: list[dict], pasta: str) -> None:
     )
 
 
+def gerar_tabela_ruido(resumo: dict, reps: int, pasta: str) -> None:
+    """E7: FP e IoU por nível de ruído, um bloco por cenário (território único / dois territórios)"""
+    ab_ = ["raio_fixo", "convex_hull", "densidade"]
+    for exp, prefixo, titulo in [("e7a", "e7a", "território único"), ("e7b", "e7b", "dois territórios (vizinho a 400\\,m)")]:
+        cens = sorted([c for (c, a) in resumo if c.startswith(prefixo + "_") and a == "raio_fixo"],
+                      key=lambda c: resumo[(c, "raio_fixo")]["params"]["sigma_ruido_m"])
+        if not cens:
+            continue
+        linhas = []
+        for c in cens:
+            sg = resumo[(c, "raio_fixo")]["params"]["sigma_ruido_m"]
+            linha = [f"{fmt(sg, 0)}"]
+            linha += [celula(resumo[(c, a)]["fp"], 1, 100) for a in ab_]
+            linha += [celula(resumo[(c, a)]["iou"], 2) for a in ab_]
+            linha += [celula(resumo[(c, a)]["dist_pior_m"], 0) for a in ["convex_hull", "densidade"]]
+            linhas.append(linha)
+        _tabela_tex(
+            os.path.join(pasta, f"tab_{exp}.tex"),
+            f"E7: efeito do ruído de posição -- {titulo} (média $\\pm$ desvio padrão em {reps} repetições). "
+            "$\\sigma$ = desvio padrão do erro por eixo (m).",
+            f"tab:{exp}",
+            ["$\\sigma$ (m)", "FP raio (\\%)", "FP hull (\\%)", "FP DBSCAN (\\%)",
+             "IoU raio", "IoU hull", "IoU DBSCAN", "Detec. hull (m)", "Detec. DBSCAN (m)"],
+            linhas,
+        )
+
+
 # --------------------------------------------------------------------------
 # saída: figuras
 # --------------------------------------------------------------------------
@@ -554,6 +602,33 @@ def fig_parametros(resumo, pasta):
     plt.close(fig)
 
 
+def fig_ruido(resumo, pasta):
+    """E7: linha de cima = território único, linha de baixo = dois territórios"""
+    plt = _plt()
+    metricas = [("fp", "Falsos positivos (%)", 100), ("iou", "IoU com território real", 1),
+                ("dist_pior_m", "Detecção, pior direção (m)", 1)]
+    fig, axes = plt.subplots(2, 3, figsize=(11, 6))
+    for i, (prefixo, rot) in enumerate((("e7a", "território único"), ("e7b", "dois territórios"))):
+        cens = sorted([c for (c, a) in resumo if c.startswith(prefixo + "_") and a == "raio_fixo"],
+                      key=lambda c: resumo[(c, "raio_fixo")]["params"]["sigma_ruido_m"])
+        xs = [resumo[(c, "raio_fixo")]["params"]["sigma_ruido_m"] for c in cens]
+        for j, (m, titulo, esc) in enumerate(metricas):
+            ax = axes[i][j]
+            for ab in ["raio_fixo", "convex_hull", "densidade"]:
+                ys = [resumo[(c, ab)][m]["media"] * esc for c in cens]
+                ic = [resumo[(c, ab)][m]["ic95"] * esc for c in cens]
+                lo = [y - (0 if math.isnan(k) else k) for y, k in zip(ys, ic)]
+                hi = [y + (0 if math.isnan(k) else k) for y, k in zip(ys, ic)]
+                ax.plot(xs, ys, marker="o", ms=3, color=CORES[ab], label=NOMES_BONITOS[ab])
+                ax.fill_between(xs, lo, hi, color=CORES[ab], alpha=0.15)
+            ax.set_xlabel("ruído de posição, sigma por eixo (m)")
+            ax.set_title(f"{titulo} -- {rot}", fontsize=9)
+    axes[0][0].legend(fontsize=7)
+    fig.tight_layout()
+    _salvar(fig, pasta, "fig_ruido")
+    plt.close(fig)
+
+
 def fig_mapa(pasta, seed):
     """uma rodada ilustrativa: pontos, zona de cada abordagem e território real"""
     plt = _plt()
@@ -619,6 +694,11 @@ def macros_de_resultados(resumo: dict) -> list[str]:
         v("EcincoIoUHullUm", "e5_outliers=0.01", h, "iou", 1, 2), v("EcincoIoUDensUm", "e5_outliers=0.01", d, "iou", 1, 2),
         v("EcincoIoUHullDez", "e5_outliers=0.1", h, "iou", 1, 2), v("EcincoIoUDensDez", "e5_outliers=0.1", d, "iou", 1, 2),
         v("EcincoFPHullDez", "e5_outliers=0.1", h, "fp", 100), v("EcincoFPDensDez", "e5_outliers=0.1", d, "fp", 100),
+        v("EseteIoUHullCinco", "e7b_s=5", h, "iou", 1, 2), v("EseteIoUDensCinco", "e7b_s=5", d, "iou", 1, 2),
+        v("EseteIoUHullDez", "e7b_s=10", h, "iou", 1, 2), v("EseteIoUDensDez", "e7b_s=10", d, "iou", 1, 2),
+        v("EseteFPDensDez", "e7b_s=10", d, "fp", 100), v("EseteFPHullDez", "e7b_s=10", h, "fp", 100),
+        v("EseteIoUDensQuinze", "e7b_s=15", d, "iou", 1, 2), v("EseteIoUHullQuinze", "e7b_s=15", h, "iou", 1, 2),
+        v("EseteaFPHullDez", "e7a_s=10", h, "fp", 100), v("EseteaIoUHullDez", "e7a_s=10", h, "iou", 1, 2),
         v("EseisIoURTrinta", "e6r_e1_R=30", r, "iou", 1, 2), v("EseisFPRTrinta", "e6r_e1_R=30", r, "fp", 100),
         v("EseisFPDoisRDuzCinq", "e6r_e2_R=250", r, "fp", 100), v("EseisIoUDoisRQuatroc", "e6r_e2_R=400", r, "iou", 1, 2),
     ]
@@ -650,8 +730,8 @@ def main():
     ap = argparse.ArgumentParser(description="Experimento completo de geofencing")
     ap.add_argument("--reps", type=int, default=30, help="repetições por cenário")
     ap.add_argument("--seed-base", type=int, default=2026)
-    ap.add_argument("--experimentos", nargs="+", default=["e1", "e2", "e3", "e4", "e5", "e6"],
-                    choices=["e1", "e2", "e3", "e4", "e5", "e6"])
+    ap.add_argument("--experimentos", nargs="+", default=["e1", "e2", "e3", "e4", "e5", "e6", "e7"],
+                    choices=["e1", "e2", "e3", "e4", "e5", "e6", "e7"])
     ap.add_argument("--saida", default="docs/dados_experimentais")
     ap.add_argument("--rapido", action="store_true", help="3 repetições, só para testar")
     ap.add_argument("--rodar-testes", action="store_true", help="roda pytest e salva a saída")
@@ -672,7 +752,7 @@ def main():
         print(f"  [{k}/{len(cenarios)}] {cfg.nome}")
 
     resumo = agregar(brutos)
-    testes = testes_pareados(brutos, ["e1_territorio_unico", "e2_dois_territorios"])
+    testes = testes_pareados(brutos, ["e1_territorio_unico", "e2_dois_territorios", "e7b_s=5", "e7b_s=10"])
 
     print("salvando dados:")
     salvar_csv_dicts(brutos, os.path.join(args.saida, "brutos.csv"))
@@ -682,6 +762,8 @@ def main():
     print("gerando tabelas .tex:")
     gerar_tabelas(resumo, reps, args.saida)
     gerar_tabela_testes(testes, args.saida)
+    if "e7" in args.experimentos:
+        gerar_tabela_ruido(resumo, reps, args.saida)
 
     print("gerando figuras:")
     if "e1" in args.experimentos:
@@ -706,6 +788,8 @@ def main():
                       args.saida, "fig_outliers")
     if "e6" in args.experimentos:
         fig_parametros(resumo, args.saida)
+    if "e7" in args.experimentos:
+        fig_ruido(resumo, args.saida)
 
     n_testes = rodar_pytest(args.saida) if args.rodar_testes else None
 
