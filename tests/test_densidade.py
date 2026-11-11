@@ -54,3 +54,90 @@ def test_lista_vazia_gera_erro():
         assert False, "Deveria ter levantado ValueError"
     except ValueError:
         pass
+
+# ---------------------------------------------------------------------------
+# teto de pontos (max_pontos): protege a memória com histórico longo
+# ---------------------------------------------------------------------------
+import random
+
+import pytest
+
+
+def _nuvem(n, lat0=-5.0892, lon0=-42.8016, espalhamento_graus=0.0002, semente=1):
+    rng = random.Random(semente)
+    return [
+        (lat0 + rng.uniform(-espalhamento_graus, espalhamento_graus),
+         lon0 + rng.uniform(-espalhamento_graus, espalhamento_graus))
+        for _ in range(n)
+    ]
+
+
+def test_sem_teto_o_resultado_e_o_mesmo_de_antes():
+    """max_pontos=None (padrão da classe, usado nos experimentos) não altera nada"""
+    pontos = _nuvem(300)
+    a = DensidadeDBSCAN(eps_metros=50.0, min_amostras=5)
+    b = DensidadeDBSCAN(eps_metros=50.0, min_amostras=5, max_pontos=None)
+    assert a.construir_zona(pontos).equals(b.construir_zona(pontos))
+
+
+def test_teto_maior_que_o_historico_nao_altera_o_resultado():
+    pontos = _nuvem(300)
+    sem = DensidadeDBSCAN(eps_metros=50.0, min_amostras=5)
+    com = DensidadeDBSCAN(eps_metros=50.0, min_amostras=5, max_pontos=1000)
+    assert sem.construir_zona(pontos).equals(com.construir_zona(pontos))
+
+
+def test_subamostrar_respeita_o_teto_e_mantem_extremos_e_ordem():
+    algoritmo = DensidadeDBSCAN(max_pontos=100)
+    pontos = [(float(i), float(i)) for i in range(1000)]
+    escolhidos = algoritmo._subamostrar(pontos)
+    assert len(escolhidos) == 100
+    assert escolhidos[0] == pontos[0]
+    assert escolhidos[-1] == pontos[-1]
+    assert escolhidos == sorted(escolhidos)  # ordem cronológica preservada
+
+
+def test_subamostrar_e_deterministico():
+    algoritmo = DensidadeDBSCAN(max_pontos=50)
+    pontos = [(float(i), 0.0) for i in range(500)]
+    assert algoritmo._subamostrar(pontos) == algoritmo._subamostrar(pontos)
+
+
+def test_teto_zero_ou_none_significa_sem_teto():
+    pontos = [(float(i), 0.0) for i in range(500)]
+    assert len(DensidadeDBSCAN(max_pontos=0)._subamostrar(pontos)) == 500
+    assert len(DensidadeDBSCAN(max_pontos=None)._subamostrar(pontos)) == 500
+
+
+def test_zona_com_teto_e_parecida_com_a_zona_completa():
+    """um território denso, com e sem teto, gera praticamente a mesma zona"""
+    pontos = _nuvem(3000)
+    completa = DensidadeDBSCAN(eps_metros=50.0, min_amostras=5).construir_zona(pontos)
+    com_teto = DensidadeDBSCAN(
+        eps_metros=50.0, min_amostras=5, max_pontos=500
+    ).construir_zona(pontos)
+    inter = completa.intersection(com_teto).area
+    uniao = completa.union(com_teto).area
+    assert inter / uniao > 0.9
+
+
+def test_teto_ainda_separa_dois_territorios():
+    casa = _nuvem(1500, -5.0892, -42.8016, semente=2)
+    vizinho = _nuvem(1500, -5.0892, -42.7970, semente=3)  # ~500 m a leste
+    algoritmo = DensidadeDBSCAN(eps_metros=50.0, min_amostras=5, max_pontos=400)
+    zona = algoritmo.construir_zona(casa + vizinho)
+    assert algoritmo.esta_dentro(zona, (-5.0892, -42.8016))
+    assert algoritmo.esta_dentro(zona, (-5.0892, -42.7970))
+    assert not algoritmo.esta_dentro(zona, (-5.0892, -42.7993))  # vazio entre os dois
+
+
+def test_historico_enorme_com_teto_roda_rapido(): 
+    """regressão: sem o teto este caso estoura a memória; com o teto leva ms"""
+    import time
+
+    pontos = _nuvem(30000)
+    algoritmo = DensidadeDBSCAN(eps_metros=50.0, min_amostras=5, max_pontos=1500)
+    inicio = time.perf_counter()
+    zona = algoritmo.construir_zona(pontos)
+    assert time.perf_counter() - inicio < 5.0
+    assert zona.area > 0

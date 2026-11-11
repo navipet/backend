@@ -29,14 +29,26 @@ class DensidadeDBSCAN(AbordagemGeofencing):
 
     nome = "densidade"
 
-    def __init__(self, eps_metros: float = 50.0, min_amostras: int = 5):
+    def __init__(
+        self,
+        eps_metros: float = 50.0,
+        min_amostras: int = 5,
+        max_pontos: int | None = None,
+    ):
         self.eps_metros = eps_metros
         self.min_amostras = min_amostras
+        # teto de pontos entregues ao DBSCAN. o custo de memória do DBSCAN cresce
+        # com o quadrado do número de pontos quando eles estão todos perto uns
+        # dos outros (um pet em casa): com leituras a cada 2 s, algumas horas de
+        # histórico já esgotam a memória de um servidor pequeno. None = sem
+        # teto (comportamento usado nos experimentos)
+        self.max_pontos = max_pontos
 
     def construir_zona(self, pontos: list[tuple[float, float]]) -> Polygon:
         if not pontos:
             raise ValueError("É necessário ao menos um ponto para construir a zona")
 
+        pontos = self._subamostrar(pontos)
         coordenadas_metros = self._projetar_para_metros(pontos)
 
         clustering = DBSCAN(eps=self.eps_metros, min_samples=self.min_amostras).fit(
@@ -59,6 +71,25 @@ class DensidadeDBSCAN(AbordagemGeofencing):
             poligonos_dos_clusters.append(self._hull_do_cluster(pontos_do_cluster))
 
         return unary_union(poligonos_dos_clusters)
+
+    def _subamostrar(
+        self, pontos: list[tuple[float, float]]
+    ) -> list[tuple[float, float]]:
+        """
+        se há mais pontos que o teto, escolhe `max_pontos` deles em intervalos
+        regulares ao longo do histórico (que deve estar em ordem cronológica).
+        é determinístico, mantém o primeiro e o último ponto e preserva a
+        distribuição no tempo. efeito colateral: `min_amostras` passa a valer
+        sobre os pontos escolhidos, então um lugar precisa de proporcionalmente
+        mais leituras para virar cluster; e o contorno de cada cluster pode
+        ficar um pouco menor, pois pontos extremos podem ser descartados.
+        """
+        if not self.max_pontos or len(pontos) <= self.max_pontos:
+            return pontos
+        indices = np.unique(
+            np.linspace(0, len(pontos) - 1, self.max_pontos).round().astype(int)
+        )
+        return [pontos[i] for i in indices]
 
     def _projetar_para_metros(
         self, pontos: list[tuple[float, float]]

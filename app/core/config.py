@@ -23,6 +23,17 @@ class Settings(BaseSettings):
     zona_min_pontos: int = 30
     zona_intervalo_recalculo: int = 50
 
+    # parametros do DBSCAN usados na zona automatica (env: ZONA_DBSCAN_EPS_METROS,
+    # ZONA_DBSCAN_MIN_AMOSTRAS). os padroes foram calibrados nos experimentos
+    # (territorio simulado de 30 m); com dados reais podem precisar de ajuste
+    zona_dbscan_eps_metros: float = 50.0
+    zona_dbscan_min_amostras: int = 5
+
+    # teto de pontos entregues ao DBSCAN em cada recalculo (env: ZONA_MAX_PONTOS).
+    # protege a memoria do servidor quando o historico cresce (leituras a cada
+    # 2 s). 0 = sem teto
+    zona_max_pontos: int = 2000
+
     # filtro de persistencia: quantas leituras SEGUIDAS fora da zona sao
     # necessarias para abrir um alerta. com leituras a cada 2 s, 5 = ~10 s
     # de atraso. 1 = comportamento antigo (uma leitura fora ja abre)

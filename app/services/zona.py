@@ -31,7 +31,11 @@ def construir_algoritmo(abordagem: str) -> AbordagemGeofencing:
     if abordagem == "convex_hull":
         return ConvexHull()
     if abordagem == "densidade":
-        return DensidadeDBSCAN()
+        return DensidadeDBSCAN(
+            eps_metros=settings.zona_dbscan_eps_metros,
+            min_amostras=settings.zona_dbscan_min_amostras,
+            max_pontos=settings.zona_max_pontos or None,
+        )
     raise AbordagemDesconhecida(abordagem)
 
 
@@ -46,11 +50,18 @@ def recalcular_zona(
     se a abordagem não conseguiu construir a zona com esse histórico
     (a menos que permitir_fallback esteja ligado
     """
-    localizacoes = db.query(Localizacao).filter(Localizacao.pet_id == pet_id).all()
-    if not localizacoes:
+    # só as duas colunas, em ordem cronológica (a subamostragem do DBSCAN
+    # depende da ordem), sem carregar um objeto completo por leitura
+    linhas = (
+        db.query(Localizacao.latitude, Localizacao.longitude)
+        .filter(Localizacao.pet_id == pet_id)
+        .order_by(Localizacao.timestamp, Localizacao.id)
+        .all()
+    )
+    if not linhas:
         return None
 
-    pontos = [(loc.latitude, loc.longitude) for loc in localizacoes]
+    pontos = [(lat, lon) for lat, lon in linhas]
 
     algoritmo = construir_algoritmo(abordagem)
     try:
