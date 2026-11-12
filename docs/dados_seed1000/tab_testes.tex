@@ -1,0 +1,30 @@
+\begin{table}[H]
+\centering
+\caption{Comparação pareada (Wilcoxon) no cenário de dois territórios; diferença = mediana(A) $-$ mediana(B) sobre as mesmas sementes.}
+\label{tab:testes}
+\footnotesize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Comparação} & \textbf{Métrica} & \textbf{Mediana da diferença} & \textbf{Valor-p} \\
+\hline
+Raio fixo vs Convex hull & Falsos positivos (p.p.) & 96,0 & $<$0,001 \\
+\hline
+Raio fixo vs Convex hull & IoU & -0,20 & $<$0,001 \\
+\hline
+Raio fixo vs Convex hull & Detecção pior dir. (m) & -430,0 & $<$0,001 \\
+\hline
+Raio fixo vs DBSCAN & Falsos positivos (p.p.) & 92,5 & $<$0,001 \\
+\hline
+Raio fixo vs DBSCAN & IoU & -0,86 & $<$0,001 \\
+\hline
+Raio fixo vs DBSCAN & Detecção pior dir. (m) & -30,0 & $<$0,001 \\
+\hline
+Convex hull vs DBSCAN & Falsos positivos (p.p.) & -3,0 & $<$0,001 \\
+\hline
+Convex hull vs DBSCAN & IoU & -0,66 & $<$0,001 \\
+\hline
+Convex hull vs DBSCAN & Detecção pior dir. (m) & 400,0 & $<$0,001 \\
+\hline
+\end{tabular}}
+\end{table}

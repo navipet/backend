@@ -1,0 +1,10 @@
+cenario,a,b,metrica,n_pares,mediana_a,mediana_b,mediana_dif_a_menos_b,p_wilcoxon
+e2_dois_territorios,raio_fixo,convex_hull,fp,30,1.0,0.04,0.96,1.6157162365260918e-06
+e2_dois_territorios,raio_fixo,convex_hull,iou,30,0.0,0.20203059671631363,-0.2019260150958896,1.862645149230957e-09
+e2_dois_territorios,raio_fixo,convex_hull,dist_pior_m,30,0.0,430.0,-430.0,6.79884997479191e-08
+e2_dois_territorios,raio_fixo,densidade,fp,30,1.0,0.07500000000000001,0.925,1.6405589938543058e-06
+e2_dois_territorios,raio_fixo,densidade,iou,30,0.0,0.8599505588127037,-0.859328816302654,1.862645149230957e-09
+e2_dois_territorios,raio_fixo,densidade,dist_pior_m,30,0.0,30.0,-30.0,4.320463057827488e-08
+e2_dois_territorios,convex_hull,densidade,fp,30,0.04,0.07500000000000001,-0.03,2.4964991133938375e-06
+e2_dois_territorios,convex_hull,densidade,iou,30,0.20203059671631363,0.8599505588127037,-0.6582218756053329,1.862645149230957e-09
+e2_dois_territorios,convex_hull,densidade,dist_pior_m,30,430.0,30.0,400.0,6.79884997479191e-08

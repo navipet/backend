@@ -1,0 +1,35 @@
+{
+  "data_execucao": "2026-11-10T18:31:04",
+  "comando": "/home/naksu/Documents/backend-navipet/backend/scripts/experimento_completo.py --experimentos e2 --seed-base 1000 --saida docs/dados_seed1000",
+  "reps": 30,
+  "seed_base": 1000,
+  "experimentos": [
+    "e2"
+  ],
+  "split_teste": 0.2,
+  "max_fuga_m": 600,
+  "git_commit": "f555b99187716770eee9e099a266fa6acec976fc",
+  "python": "3.12.15",
+  "so": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+  "numpy": "2.1.1",
+  "shapely": "2.0.6",
+  "scikit_learn": "1.5.2",
+  "scipy": "1.18.0",
+  "testes_passaram": null,
+  "cenarios": [
+    {
+      "experimento": "e2",
+      "nome": "e2_dois_territorios",
+      "num_pontos": 500,
+      "distancia_segundo_m": 400.0,
+      "prob_mudanca": 0.03,
+      "prop_outliers": 0.0,
+      "sigma_ruido_m": 0.0,
+      "raio_passeio_m": 30.0,
+      "intervalo_min": 5.0,
+      "raio_fixo_m": 100.0,
+      "eps_m": 50.0,
+      "min_amostras": 5
+    }
+  ]
+}
