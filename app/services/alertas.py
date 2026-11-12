@@ -7,6 +7,7 @@ from app.models.models import Alerta, Pet, ZonaSegura
 from app.services.regras_alerta import (
     ABRIR,
     RESOLVER,
+    atualizar_contador_dentro,
     atualizar_contador_fora,
     decidir_acao_alerta,
 )
@@ -49,7 +50,8 @@ def avaliar_posicao(
     avalia se uma posicao esta dentro da zona segura atual do pet e
     atualiza os alertas de acordo: abre um alerta quando o pet fica fora
     por `settings.alerta_leituras_consecutivas` leituras seguidas (filtro
-    de persistencia) e o resolve quando ele volta
+    de persistencia) e o resolve quando ele fica dentro por
+    `settings.alerta_leituras_para_fechar` leituras seguidas (histerese)
 
     `nova_leitura=False` reavalia sem mexer no contador -- usado pelo
     endpoint de status, que reavalia sempre a mesma ultima leitura e nao
@@ -69,8 +71,9 @@ def avaliar_posicao(
         pet.leituras_fora_consecutivas = atualizar_contador_fora(
             dentro, pet.leituras_fora_consecutivas or 0
         )
-    elif dentro:
-        pet.leituras_fora_consecutivas = 0
+        pet.leituras_dentro_consecutivas = atualizar_contador_dentro(
+            dentro, pet.leituras_dentro_consecutivas or 0
+        )
 
     alerta_aberto = (
         db.query(Alerta)
@@ -87,6 +90,8 @@ def avaliar_posicao(
         alerta_aberto is not None,
         leituras_fora_consecutivas=pet.leituras_fora_consecutivas,
         limiar=settings.alerta_leituras_consecutivas,
+        leituras_dentro_consecutivas=pet.leituras_dentro_consecutivas or 0,
+        limiar_fechar=settings.alerta_leituras_para_fechar,
     )
     if acao == ABRIR:
         db.add(

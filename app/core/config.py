@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     # (env: ALERTA_LEITURAS_CONSECUTIVAS)
     alerta_leituras_consecutivas: int = 5
 
+    # histerese: quantas leituras SEGUIDAS dentro da zona sao necessarias para
+    # fechar (resolver) o alerta. evita abre/fecha repetido com o pet na borda.
+    # 1 = comportamento antigo (uma leitura dentro ja fecha)
+    # (env: ALERTA_LEITURAS_PARA_FECHAR)
+    alerta_leituras_para_fechar: int = 5
+
     class Config:
         env_file = ".env"
 

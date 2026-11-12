@@ -15,6 +15,11 @@ aberto, decide o que fazer:
   alertas duplicados e alertas por leituras isoladas)
 
 com limiar = 1 o comportamento eh o original (uma leitura fora ja abre)
+
+histerese (tolerancia na volta): para o alerta FECHAR tambem eh preciso
+`limiar_fechar` leituras SEGUIDAS dentro da zona; uma leitura fora zera esse
+contador. evita o abre/fecha repetido quando o pet fica na borda.
+com limiar_fechar = 1 o comportamento eh o anterior (uma leitura dentro fecha)
 """
 
 ABRIR = "abrir"
@@ -29,19 +34,32 @@ def atualizar_contador_fora(dentro_da_zona: bool, contador_atual: int) -> int:
     return contador_atual + 1
 
 
+def atualizar_contador_dentro(dentro_da_zona: bool, contador_atual: int) -> int:
+    """novo valor do contador de leituras seguidas dentro da zona"""
+    if not dentro_da_zona:
+        return 0
+    return contador_atual + 1
+
+
 def decidir_acao_alerta(
     dentro_da_zona: bool,
     ha_alerta_aberto: bool,
     leituras_fora_consecutivas: int = 1,
     limiar: int = 1,
+    leituras_dentro_consecutivas: int = 1,
+    limiar_fechar: int = 1,
 ) -> str:
     """
-    `leituras_fora_consecutivas` ja deve incluir a leitura atual (use
-    atualizar_contador_fora antes). `limiar` menor que 1 eh tratado como 1
+    `leituras_fora_consecutivas` e `leituras_dentro_consecutivas` ja devem
+    incluir a leitura atual (use os atualizar_contador_* antes). limiares
+    menores que 1 sao tratados como 1
     """
     limiar = max(1, limiar)
+    limiar_fechar = max(1, limiar_fechar)
     if dentro_da_zona:
-        return RESOLVER if ha_alerta_aberto else NADA
+        if ha_alerta_aberto and leituras_dentro_consecutivas >= limiar_fechar:
+            return RESOLVER
+        return NADA
     if not ha_alerta_aberto and leituras_fora_consecutivas >= limiar:
         return ABRIR
     return NADA

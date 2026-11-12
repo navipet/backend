@@ -42,6 +42,10 @@ class Pet(Base):
     leituras_fora_consecutivas = Column(
         Integer, nullable=False, default=0, server_default="0"
     )
+    # histerese: leituras seguidas dentro da zona (para fechar o alerta)
+    leituras_dentro_consecutivas = Column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
     tutor = relationship("Tutor", back_populates="pets")
     localizacoes = relationship("Localizacao", back_populates="pet")
