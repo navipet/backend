@@ -60,7 +60,11 @@ class Localizacao(Base):
     pet_id = Column(Integer, ForeignKey("pets.id"), nullable=False, index=True)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
+    # hora da leitura: a que o dispositivo mandou, ou a do servidor se ele nao mandou
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+    # hora (UTC) em que o SERVIDOR recebeu a leitura. sempre preenchida pelo
+    # servidor, independe do relogio do dispositivo (nula em leituras antigas)
+    recebido_em = Column(DateTime, nullable=True)
     geom = Column(Geometry(geometry_type="POINT", srid=4326), nullable=True)
 
     pet = relationship("Pet", back_populates="localizacoes")
@@ -102,16 +106,39 @@ class Antena(Base):
 
     # MAC normalizado em maiúsculas: AA:BB:CC:DD:EE:FF
     endereco_mac = Column(String(17), primary_key=True)
-    latitude = Column(Numeric(11, 8, asdecimal=False), nullable=False)
-    longitude = Column(Numeric(11, 8, asdecimal=False), nullable=False)
-    # RSSI (dBm) medido a 1 metro da tag
-    rssi_referencia = Column(SmallInteger, nullable=False)
-    # expoente de perda de percurso do ambiente (~2 em espaço aberto, 3 a 4 com obstáculos)
-    expoente_perda = Column(Numeric(4, 2, asdecimal=False), nullable=False)
+    codigo_epsg = Column(Integer, nullable=False)
+
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    altura_elipsoidal_m = Column(Float, nullable=False)
+
+    # incerteza da posição da antena no plano local (leste/norte), em m²
+    variancia_leste_m2 = Column(Float, nullable=False)
+    variancia_norte_m2 = Column(Float, nullable=False)
+    covariancia_leste_norte_m2 = Column(Float, nullable=False)
+
+    # modelo de propagação (log-distância com sombreamento)
+    potencia_referencia_1m_dbm = Column(Float, nullable=False)
+    expoente_perda_percurso = Column(Float, nullable=False)
+    desvio_sombreamento_los_db = Column(Float, nullable=False)
+    fator_inflacao_dispersao = Column(Float, nullable=False)
+    limiar_rssi_dbm = Column(SmallInteger, nullable=False)
 
     __table_args__ = (
         CheckConstraint("latitude BETWEEN -90 AND 90", name="ck_antenas_latitude_valida"),
         CheckConstraint("longitude BETWEEN -180 AND 180", name="ck_antenas_longitude_valida"),
-        CheckConstraint("rssi_referencia BETWEEN -127 AND 0", name="ck_antenas_rssi_valido"),
-        CheckConstraint("expoente_perda > 0", name="ck_antenas_expoente_positivo"),
+        CheckConstraint(
+            "variancia_leste_m2 > 0 AND variancia_norte_m2 > 0",
+            name="ck_antenas_variancias_positivas",
+        ),
+        CheckConstraint(
+            "variancia_leste_m2 * variancia_norte_m2 >= "
+            "covariancia_leste_norte_m2 * covariancia_leste_norte_m2",
+            name="ck_antenas_covariancia_semidefinida_positiva",
+        ),
+        CheckConstraint(
+            "expoente_perda_percurso BETWEEN 1.5 AND 6.0", name="ck_antenas_expoente_plausivel"
+        ),
+        CheckConstraint("desvio_sombreamento_los_db > 0", name="ck_antenas_desvio_positivo"),
+        CheckConstraint("limiar_rssi_dbm < 0", name="ck_antenas_limiar_negativo"),
     )

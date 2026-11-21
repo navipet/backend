@@ -72,12 +72,14 @@ def registrar_localizacao(
         raise HTTPException(404, "Pet não encontrado")
 
     ponto = Point(dados.longitude, dados.latitude)
+    recebido_em = datetime.utcnow()  # hora do servidor, sempre guardada
 
     localizacao = Localizacao(
         pet_id=pet_id,
         latitude=dados.latitude,
         longitude=dados.longitude,
-        timestamp=dados.timestamp or datetime.utcnow(),
+        timestamp=dados.timestamp or recebido_em,
+        recebido_em=recebido_em,
         geom=from_shape(ponto, srid=4326),
     )
     db.add(localizacao)

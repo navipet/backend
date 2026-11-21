@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.utils.mac import normalizar_mac
 
@@ -56,6 +56,7 @@ class LocalizacaoOut(BaseModel):
     latitude: float
     longitude: float
     timestamp: datetime
+    recebido_em: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -92,14 +93,31 @@ class AlertaOut(BaseModel):
 
 
 class AntenaConfig(BaseModel):
-    """posição e parâmetros de cálculo de uma antena (corpo do PUT e resposta do GET por MAC)"""
+    """posição e parâmetros de uma antena (corpo do PUT)"""
 
     model_config = ConfigDict(from_attributes=True)
 
+    codigo_epsg: int = Field(..., gt=0)
     latitude: float = Field(..., ge=-90, le=90)
     longitude: float = Field(..., ge=-180, le=180)
-    rssi_referencia: int = Field(..., ge=-127, le=0)
-    expoente_perda: float = Field(..., gt=0, le=99.99)
+    altura_elipsoidal_m: float
+    variancia_leste_m2: float = Field(..., gt=0)
+    variancia_norte_m2: float = Field(..., gt=0)
+    covariancia_leste_norte_m2: float
+    potencia_referencia_1m_dbm: float
+    expoente_perda_percurso: float = Field(..., ge=1.5, le=6.0)
+    desvio_sombreamento_los_db: float = Field(..., gt=0)
+    fator_inflacao_dispersao: float
+    limiar_rssi_dbm: int = Field(..., lt=0)
+
+    @model_validator(mode="after")
+    def _covariancia_semidefinida_positiva(self):
+        if self.variancia_leste_m2 * self.variancia_norte_m2 < self.covariancia_leste_norte_m2**2:
+            raise ValueError(
+                "covariância inválida: variancia_leste_m2 * variancia_norte_m2 "
+                "deve ser >= covariancia_leste_norte_m2 ao quadrado"
+            )
+        return self
 
 
 class AntenaCreate(AntenaConfig):
@@ -117,3 +135,11 @@ class AntenaOut(AntenaConfig):
 
 class AntenaListaOut(BaseModel):
     antenas: list[AntenaOut]
+
+
+class AntenaBootOut(AntenaConfig):
+    """resposta de GET /antena/{mac}: os campos novos mais os nomes antigos
+    (rssi_referencia e expoente_perda), para o firmware que já está gravado continuar lendo"""
+
+    rssi_referencia: int
+    expoente_perda: float

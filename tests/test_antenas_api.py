@@ -10,13 +10,21 @@ from app.main import app
 from app.models.models import Antena
 
 MAC = "AA:BB:CC:DD:EE:01"
-CORPO = {
-    "endereco_mac": MAC,
+CAMPOS = {
+    "codigo_epsg": 31983,
     "latitude": -5.0892,
     "longitude": -42.8019,
-    "rssi_referencia": -59,
-    "expoente_perda": 2.5,
+    "altura_elipsoidal_m": 70.5,
+    "variancia_leste_m2": 4.0,
+    "variancia_norte_m2": 9.0,
+    "covariancia_leste_norte_m2": 1.5,
+    "potencia_referencia_1m_dbm": -59.0,
+    "expoente_perda_percurso": 2.5,
+    "desvio_sombreamento_los_db": 4.0,
+    "fator_inflacao_dispersao": 1.2,
+    "limiar_rssi_dbm": -90,
 }
+CORPO = {"endereco_mac": MAC, **CAMPOS}
 
 
 @pytest.fixture()
@@ -68,10 +76,15 @@ def test_criar_com_mac_invalido_devolve_422(client):
         ("latitude", 91),
         ("latitude", -91),
         ("longitude", 181),
-        ("rssi_referencia", 1),
-        ("rssi_referencia", -128),
-        ("expoente_perda", 0),
-        ("expoente_perda", -1),
+        ("variancia_leste_m2", 0),
+        ("variancia_norte_m2", -1),
+        ("expoente_perda_percurso", 1.4),
+        ("expoente_perda_percurso", 6.1),
+        ("desvio_sombreamento_los_db", 0),
+        ("limiar_rssi_dbm", 0),
+        ("limiar_rssi_dbm", 5),
+        ("covariancia_leste_norte_m2", 7),  # 4*9=36 < 49
+        ("potencia_referencia_1m_dbm", "abc"),
     ],
 )
 def test_valores_fora_da_faixa_devolvem_422(client, campo, valor):
@@ -94,16 +107,22 @@ def test_listar_devolve_todas_com_mac(client):
     assert macs == ["AA:BB:CC:DD:EE:01", "AA:BB:CC:DD:EE:02"]
 
 
-def test_obter_por_mac_devolve_so_os_quatro_campos_do_contrato(client):
+def test_obter_por_mac_devolve_campos_novos_e_nomes_antigos(client):
     client.post("/antena", json=CORPO)
     r = client.get(f"/antena/{MAC}")
     assert r.status_code == 200
-    assert r.json() == {
-        "latitude": -5.0892,
-        "longitude": -42.8019,
-        "rssi_referencia": -59,
-        "expoente_perda": 2.5,
-    }
+    esperado = {**CAMPOS, "rssi_referencia": -59, "expoente_perda": 2.5}
+    assert r.json() == esperado
+
+
+def test_criar_sem_campo_obrigatorio_devolve_422(client):
+    corpo = {k: v for k, v in CORPO.items() if k != "limiar_rssi_dbm"}
+    assert client.post("/antena", json=corpo).status_code == 422
+
+
+def test_covariancia_no_limite_e_aceita(client):
+    r = client.post("/antena", json={**CORPO, "covariancia_leste_norte_m2": -6.0})  # 4*9 = 6^2
+    assert r.status_code == 201
 
 
 def test_obter_aceita_mac_em_minusculas(client):
@@ -121,21 +140,28 @@ def test_obter_com_mac_invalido_devolve_422(client):
 
 def test_atualizar_persiste_os_novos_valores(client):
     client.post("/antena", json=CORPO)
-    novo = {"latitude": -5.1, "longitude": -42.9, "rssi_referencia": -62, "expoente_perda": 3.0}
+    novo = {**CAMPOS, "latitude": -5.1, "longitude": -42.9, "expoente_perda_percurso": 3.0,
+            "limiar_rssi_dbm": -85}
     r = client.put(f"/antena/{MAC}", json=novo)
     assert r.status_code == 200
-    assert client.get(f"/antena/{MAC}").json() == novo
+    assert r.json() == {"endereco_mac": MAC, **novo}
+    guardado = client.get(f"/antena/{MAC}").json()
+    assert {k: guardado[k] for k in novo} == novo
 
 
 def test_atualizar_inexistente_devolve_404(client):
-    novo = {"latitude": -5.1, "longitude": -42.9, "rssi_referencia": -62, "expoente_perda": 3.0}
-    assert client.put(f"/antena/{MAC}", json=novo).status_code == 404
+    assert client.put(f"/antena/{MAC}", json=CAMPOS).status_code == 404
 
 
 def test_atualizar_com_valor_invalido_devolve_422(client):
     client.post("/antena", json=CORPO)
-    novo = {"latitude": 200, "longitude": -42.9, "rssi_referencia": -62, "expoente_perda": 3.0}
-    assert client.put(f"/antena/{MAC}", json=novo).status_code == 422
+    assert client.put(f"/antena/{MAC}", json={**CAMPOS, "latitude": 200}).status_code == 422
+
+
+def test_atualizar_com_covariancia_invalida_devolve_422(client):
+    client.post("/antena", json=CORPO)
+    r = client.put(f"/antena/{MAC}", json={**CAMPOS, "covariancia_leste_norte_m2": 100})
+    assert r.status_code == 422
 
 
 def test_remover_devolve_200_e_antena_some(client):

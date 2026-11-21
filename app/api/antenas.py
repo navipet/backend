@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.models import Antena
-from app.models.schemas import AntenaConfig, AntenaCreate, AntenaListaOut, AntenaOut
+from app.models.schemas import AntenaBootOut, AntenaConfig, AntenaCreate, AntenaListaOut, AntenaOut
 from app.utils.mac import normalizar_mac
 
 logger = logging.getLogger(__name__)
@@ -71,10 +71,15 @@ def listar_antenas(db: Session = Depends(get_db)):
     return {"antenas": antenas}
 
 
-@router.get("/{endereco_mac}", response_model=AntenaConfig)
+@router.get("/{endereco_mac}", response_model=AntenaBootOut)
 def obter_antena(endereco_mac: str, db: Session = Depends(get_db)):
-    """devolve posição e parâmetros de uma antena (a antena chama isto uma vez, ao ligar)"""
-    return _antena_ou_404(db, endereco_mac)
+    """devolve posição e parâmetros de uma antena (a antena chama isto uma vez, ao ligar).
+    Inclui também rssi_referencia e expoente_perda (nomes antigos) por compatibilidade."""
+    antena = _antena_ou_404(db, endereco_mac)
+    dados = AntenaConfig.model_validate(antena).model_dump()
+    dados["rssi_referencia"] = round(antena.potencia_referencia_1m_dbm)
+    dados["expoente_perda"] = antena.expoente_perda_percurso
+    return dados
 
 
 @router.put("/{endereco_mac}", response_model=AntenaOut)
