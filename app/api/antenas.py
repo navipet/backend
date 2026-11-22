@@ -77,7 +77,7 @@ def obter_antena(endereco_mac: str, db: Session = Depends(get_db)):
     Inclui também rssi_referencia e expoente_perda (nomes antigos) por compatibilidade."""
     antena = _antena_ou_404(db, endereco_mac)
     dados = AntenaConfig.model_validate(antena).model_dump()
-    dados["rssi_referencia"] = round(antena.potencia_referencia_1m_dbm)
+    dados["rssi_referencia"] = round(antena.potencia_referencia_dbm)
     dados["expoente_perda"] = antena.expoente_perda_percurso
     return dados
 

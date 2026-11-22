@@ -50,3 +50,14 @@ def test_resposta_da_api_inclui_recebido_em():
         timestamp=datetime(2026, 11, 19, 12), recebido_em=datetime(2026, 11, 19, 12, 0, 1),
     )
     assert out.recebido_em.second == 1
+
+
+def test_timestamp_com_fuso_e_convertido_para_utc_sem_fuso():
+    loc = _chamar("2026-11-21T15:43:36.052-03:00")
+    assert loc.timestamp == datetime(2026, 11, 21, 18, 43, 36, 52000)
+    assert loc.timestamp.tzinfo is None
+
+
+def test_timestamp_em_utc_com_z_e_aceito():
+    loc = _chamar("2026-11-21T18:43:36.052Z")
+    assert loc.timestamp == datetime(2026, 11, 21, 18, 43, 36, 52000)

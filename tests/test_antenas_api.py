@@ -9,20 +9,13 @@ from app.db.session import get_db
 from app.main import app
 from app.models.models import Antena
 
-MAC = "AA:BB:CC:DD:EE:01"
+MAC = "aa:bb:cc:dd:ee:01"
 CAMPOS = {
-    "codigo_epsg": 31983,
     "latitude": -5.0892,
     "longitude": -42.8019,
-    "altura_elipsoidal_m": 70.5,
-    "variancia_leste_m2": 4.0,
-    "variancia_norte_m2": 9.0,
-    "covariancia_leste_norte_m2": 1.5,
-    "potencia_referencia_1m_dbm": -59.0,
+    "potencia_referencia_dbm": -59.0,
     "expoente_perda_percurso": 2.5,
-    "desvio_sombreamento_los_db": 4.0,
-    "fator_inflacao_dispersao": 1.2,
-    "limiar_rssi_dbm": -90,
+    "desvio_sombreamento_db": 4.0,
 }
 CORPO = {"endereco_mac": MAC, **CAMPOS}
 
@@ -54,7 +47,7 @@ def test_criar_antena_devolve_201_e_dados(client):
 
 
 def test_mac_e_normalizado_ao_criar(client):
-    r = client.post("/antena", json={**CORPO, "endereco_mac": "aa-bb-cc-dd-ee-01"})
+    r = client.post("/antena", json={**CORPO, "endereco_mac": "AA-BB-CC-DD-EE-01"})
     assert r.status_code == 201
     assert r.json()["endereco_mac"] == MAC
 
@@ -76,15 +69,15 @@ def test_criar_com_mac_invalido_devolve_422(client):
         ("latitude", 91),
         ("latitude", -91),
         ("longitude", 181),
-        ("variancia_leste_m2", 0),
-        ("variancia_norte_m2", -1),
-        ("expoente_perda_percurso", 1.4),
+        ("longitude", -181),
+        ("potencia_referencia_dbm", -100.5),
+        ("potencia_referencia_dbm", 0.5),
+        ("potencia_referencia_dbm", "abc"),
+        ("expoente_perda_percurso", 0.9),
         ("expoente_perda_percurso", 6.1),
-        ("desvio_sombreamento_los_db", 0),
-        ("limiar_rssi_dbm", 0),
-        ("limiar_rssi_dbm", 5),
-        ("covariancia_leste_norte_m2", 7),  # 4*9=36 < 49
-        ("potencia_referencia_1m_dbm", "abc"),
+        ("desvio_sombreamento_db", 0),
+        ("desvio_sombreamento_db", 30),
+        ("desvio_sombreamento_db", -1),
     ],
 )
 def test_valores_fora_da_faixa_devolvem_422(client, campo, valor):
@@ -104,7 +97,7 @@ def test_listar_devolve_todas_com_mac(client):
     r = client.get("/antena")
     assert r.status_code == 200
     macs = [a["endereco_mac"] for a in r.json()["antenas"]]
-    assert macs == ["AA:BB:CC:DD:EE:01", "AA:BB:CC:DD:EE:02"]
+    assert macs == ["aa:bb:cc:dd:ee:01", "aa:bb:cc:dd:ee:02"]
 
 
 def test_obter_por_mac_devolve_campos_novos_e_nomes_antigos(client):
@@ -116,18 +109,38 @@ def test_obter_por_mac_devolve_campos_novos_e_nomes_antigos(client):
 
 
 def test_criar_sem_campo_obrigatorio_devolve_422(client):
-    corpo = {k: v for k, v in CORPO.items() if k != "limiar_rssi_dbm"}
+    corpo = {k: v for k, v in CORPO.items() if k != "desvio_sombreamento_db"}
     assert client.post("/antena", json=corpo).status_code == 422
 
 
-def test_covariancia_no_limite_e_aceita(client):
-    r = client.post("/antena", json={**CORPO, "covariancia_leste_norte_m2": -6.0})  # 4*9 = 6^2
+def test_coordenada_zero_zero_devolve_422(client):
+    r = client.post("/antena", json={**CORPO, "latitude": 0, "longitude": 0})
+    assert r.status_code == 422
+
+
+@pytest.mark.parametrize("lat,lon", [(0, -42.8), (-5.08, 0)])
+def test_so_uma_coordenada_zerada_e_aceita(client, lat, lon):
+    r = client.post("/antena", json={**CORPO, "latitude": lat, "longitude": lon})
     assert r.status_code == 201
 
 
-def test_obter_aceita_mac_em_minusculas(client):
+@pytest.mark.parametrize(
+    "campo,valor",
+    [
+        ("potencia_referencia_dbm", -100),
+        ("potencia_referencia_dbm", 0),
+        ("expoente_perda_percurso", 1.0),
+        ("expoente_perda_percurso", 6.0),
+        ("desvio_sombreamento_db", 29.5),
+    ],
+)
+def test_limites_inclusivos_sao_aceitos(client, campo, valor):
+    assert client.post("/antena", json={**CORPO, campo: valor}).status_code == 201
+
+
+def test_obter_aceita_mac_em_maiusculas(client):
     client.post("/antena", json=CORPO)
-    assert client.get("/antena/aa:bb:cc:dd:ee:01").status_code == 200
+    assert client.get("/antena/AA:BB:CC:DD:EE:01").status_code == 200
 
 
 def test_obter_inexistente_devolve_404(client):
@@ -141,7 +154,7 @@ def test_obter_com_mac_invalido_devolve_422(client):
 def test_atualizar_persiste_os_novos_valores(client):
     client.post("/antena", json=CORPO)
     novo = {**CAMPOS, "latitude": -5.1, "longitude": -42.9, "expoente_perda_percurso": 3.0,
-            "limiar_rssi_dbm": -85}
+            "desvio_sombreamento_db": 6.0}
     r = client.put(f"/antena/{MAC}", json=novo)
     assert r.status_code == 200
     assert r.json() == {"endereco_mac": MAC, **novo}
@@ -158,9 +171,9 @@ def test_atualizar_com_valor_invalido_devolve_422(client):
     assert client.put(f"/antena/{MAC}", json={**CAMPOS, "latitude": 200}).status_code == 422
 
 
-def test_atualizar_com_covariancia_invalida_devolve_422(client):
+def test_atualizar_para_zero_zero_devolve_422(client):
     client.post("/antena", json=CORPO)
-    r = client.put(f"/antena/{MAC}", json={**CAMPOS, "covariancia_leste_norte_m2": 100})
+    r = client.put(f"/antena/{MAC}", json={**CAMPOS, "latitude": 0, "longitude": 0})
     assert r.status_code == 422
 
 

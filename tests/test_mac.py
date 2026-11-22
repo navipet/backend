@@ -15,7 +15,7 @@ from app.utils.mac import normalizar_mac
     ],
 )
 def test_formatos_validos_viram_o_mesmo_mac_normalizado(entrada):
-    assert normalizar_mac(entrada) == "AA:BB:CC:DD:EE:FF"
+    assert normalizar_mac(entrada) == "aa:bb:cc:dd:ee:ff"
 
 
 @pytest.mark.parametrize(
